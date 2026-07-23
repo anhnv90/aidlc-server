@@ -1,0 +1,32 @@
+{
+  "name": "aidlc-server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm run build:dashboard && tsx watch server/src/main.ts",
+    "start": "node dist/server/main.js",
+    "build": "npm run build:dashboard && npm run build:server",
+    "build:server": "tsc -p server/tsconfig.json",
+    "build:dashboard": "vite build --config dashboard/vite.config.ts",
+    "typecheck": "tsc -p server/tsconfig.json --noEmit && tsc -p dashboard/tsconfig.json --noEmit",
+    "fake:ask": "node scripts/fake-message.cjs ask",
+    "fake:add": "node scripts/fake-message.cjs add",
+    "fake:update": "node scripts/fake-message.cjs update",
+    "fake:delete": "node scripts/fake-message.cjs delete"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "dotenv": "^16.4.7",
+    "vue": "^3.5.13",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}
+
