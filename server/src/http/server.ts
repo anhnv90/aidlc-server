@@ -7,10 +7,15 @@ import { RuleUpdateHistoryStore } from "../db/ruleUpdateHistoryStore";
 import { CommandHandler } from "../commands/handler";
 import { log } from "../log";
 import { fakeChatStore } from "../mattermost/fakeChatStore";
+import { MattermostClient } from "../mattermost/client";
 
-export function startHttpServer(history: RuleUpdateHistoryStore, commandHandler: CommandHandler) {
+export function startHttpServer(
+  history: RuleUpdateHistoryStore,
+  commandHandler: CommandHandler,
+  mattermost: MattermostClient
+) {
   const server = createServer((req, res) => {
-    void route(req, res, history, commandHandler);
+    void route(req, res, history, commandHandler, mattermost);
   });
 
   server.listen(config.serverPort, () => {
@@ -27,7 +32,8 @@ async function route(
   req: IncomingMessage,
   res: ServerResponse,
   history: RuleUpdateHistoryStore,
-  commandHandler: CommandHandler
+  commandHandler: CommandHandler,
+  mattermost: MattermostClient
 ) {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
 
@@ -83,6 +89,25 @@ async function route(
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/mattermost/messages") {
+      const body = await readJsonBody(req);
+      const request = toMattermostPostRequest(body);
+      const results = [];
+
+      for (const channelId of request.channelIds) {
+        if (config.mattermost.allowedChannelIds.size > 0 && !config.mattermost.allowedChannelIds.has(channelId)) {
+          sendJson(res, { error: `channel_not_allowed: ${channelId}` }, 403);
+          return;
+        }
+
+        const result = await mattermost.postPlainMessage({ channelId, message: request.message });
+        results.push({ channelId, postId: result.id ?? null });
+      }
+
+      sendJson(res, { ok: true, results });
+      return;
+    }
+
     const detailMatch = /^\/api\/rule-updates\/(\d+)$/.exec(url.pathname);
     if (req.method === "GET" && detailMatch) {
       const item = history.get(Number(detailMatch[1]));
@@ -133,6 +158,33 @@ function toFakeMessage(body: unknown): MattermostMessage {
 
 function defaultFakeChannelId() {
   return Array.from(config.mattermost.allowedChannelIds)[0] ?? "fake-channel-id";
+}
+
+function toMattermostPostRequest(body: unknown) {
+  const data = isRecord(body) ? body : {};
+  const message = String(data.message ?? "").trim();
+  if (!message) {
+    throw new Error("message is required");
+  }
+
+  const rawChannelIds = Array.isArray(data.channelIds)
+    ? data.channelIds
+    : data.channelId === "__all__"
+      ? Array.from(config.mattermost.allowedChannelIds)
+      : [data.channelId];
+
+  const channelIds = rawChannelIds
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean);
+
+  if (channelIds.length === 0) {
+    throw new Error("channelId or channelIds is required");
+  }
+
+  return {
+    message,
+    channelIds: Array.from(new Set(channelIds))
+  };
 }
 
 async function readJsonBody(req: IncomingMessage) {

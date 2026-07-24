@@ -15,7 +15,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -83,6 +84,18 @@ select {
   align-items: end;
 }
 
+.direct-post-panel {
+  margin-bottom: 18px;
+}
+
+.direct-post-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.25fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 14px;
+  align-items: end;
+}
+
 .field {
   display: grid;
   gap: 6px;
@@ -95,12 +108,36 @@ select {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   height: 38px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   padding: 0 10px;
   background: #fff;
+}
+
+.field textarea {
+  min-height: 76px;
+  padding: 9px 10px;
+  resize: vertical;
+}
+
+.direct-post-button {
+  min-width: 96px;
+  margin-bottom: 0;
+}
+
+.direct-post-feedback {
+  display: flex;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.success-text {
+  color: #047857;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .button {
@@ -436,6 +473,7 @@ a:hover {
 
 @media (max-width: 960px) {
   .filters,
+  .direct-post-form,
   .layout,
   .test-layout {
     grid-template-columns: 1fr;

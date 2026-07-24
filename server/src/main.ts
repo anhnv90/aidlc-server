@@ -15,7 +15,7 @@ async function main() {
   const mattermost = new MattermostClient();
   const commandHandler = new CommandHandler(mattermost, history);
 
-  startHttpServer(history, commandHandler);
+  startHttpServer(history, commandHandler, mattermost);
 
   const listener = new MattermostWebSocketListener((message) => commandHandler.handle(message));
   listener.start();

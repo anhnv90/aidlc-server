@@ -45,7 +45,7 @@ type RuntimeConfig = {
 };
 
 const samples = {
-  ask: "@claude rule ask rule về browser-based definition of done đã có chưa?",
+  ask: "@claude rule về browser-based definition of done đã có chưa?",
   add: `@claude rule add
 rule_id: DOD-UI-02
 target: aidlc-rules/.aidlc-rule-details/construction/build-and-test.md
@@ -117,6 +117,11 @@ const app = createApp({
     const chatInput = ref(samples.ask);
     const chatLoading = ref(false);
     const chatError = ref("");
+    const directPostChannelId = ref("__all__");
+    const directPostMessage = ref("");
+    const directPostLoading = ref(false);
+    const directPostStatus = ref("");
+    const directPostError = ref("");
     let chatPollTimer: ReturnType<typeof setInterval> | null = null;
 
     const selectedId = computed(() => selected.value?.id ?? null);
@@ -125,7 +130,11 @@ const app = createApp({
     async function loadRuntimeConfig() {
       const res = await fetch("/api/runtime-config");
       if (!res.ok) return;
-      runtimeConfig.value = (await res.json()) as RuntimeConfig;
+      const data = (await res.json()) as RuntimeConfig;
+      runtimeConfig.value = data;
+      if (data.allowedChannelIds.length === 1) {
+        directPostChannelId.value = data.allowedChannelIds[0];
+      }
     }
 
     async function loadUpdates() {
@@ -195,6 +204,37 @@ const app = createApp({
       await loadChatMessages();
     }
 
+    async function sendDirectPost() {
+      const message = directPostMessage.value.trim();
+      if (!message) return;
+
+      directPostLoading.value = true;
+      directPostStatus.value = "";
+      directPostError.value = "";
+
+      try {
+        const res = await fetch("/api/mattermost/messages", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            channelId: directPostChannelId.value,
+            message
+          })
+        });
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : {};
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+        const count = Array.isArray(data.results) ? data.results.length : 0;
+        directPostStatus.value = `Posted to ${count} channel${count === 1 ? "" : "s"}.`;
+        directPostMessage.value = "";
+      } catch (err) {
+        directPostError.value = err instanceof Error ? err.message : String(err);
+      } finally {
+        directPostLoading.value = false;
+      }
+    }
+
     function useSample(name: keyof typeof samples) {
       chatInput.value = samples[name];
     }
@@ -245,12 +285,18 @@ const app = createApp({
       chatInput,
       chatLoading,
       chatError,
+      directPostChannelId,
+      directPostMessage,
+      directPostLoading,
+      directPostStatus,
+      directPostError,
       loadUpdates,
       selectUpdate,
       formatDate,
       navigate,
       sendChatMessage,
       clearChat,
+      sendDirectPost,
       useSample,
       renderMessage
     };
@@ -260,7 +306,7 @@ const app = createApp({
       <header class="topbar">
         <div>
           <h1>{{ isTestPage ? 'Mattermost Test Page' : 'AI-DLC Rule Update History' }}</h1>
-          <p>{{ isTestPage ? 'Fake Mattermost chat for rule ask/add/update/delete commands.' : 'Read-only dashboard for Mattermost-triggered rule changes.' }}</p>
+          <p>{{ isTestPage ? 'Fake Mattermost chat for rule ask/add/update/delete commands.' : 'Dashboard for Mattermost-triggered rule changes and direct bot posts.' }}</p>
         </div>
         <nav class="nav">
           <button class="nav-button" :class="{ active: route === 'history' }" @click="navigate('history')">History</button>
@@ -337,6 +383,47 @@ const app = createApp({
       </section>
 
       <section v-else class="content">
+        <section class="panel direct-post-panel">
+          <div class="panel-header">
+            <h2>Mattermost Post</h2>
+            <span class="muted">{{ runtimeConfig?.mattermostFakeMode ? 'fake mode' : 'real mode' }}</span>
+          </div>
+          <form class="direct-post-form" @submit.prevent="sendDirectPost">
+            <div class="field channel-field">
+              <label>Channel</label>
+              <select v-model="directPostChannelId">
+                <option v-if="(runtimeConfig?.allowedChannelIds?.length || 0) > 1" value="__all__">All allowed channels</option>
+                <option
+                  v-for="channelId in runtimeConfig?.allowedChannelIds || []"
+                  :key="channelId"
+                  :value="channelId"
+                >
+                  {{ channelId }}
+                </option>
+              </select>
+            </div>
+            <div class="field direct-message-field">
+              <label>Message</label>
+              <textarea
+                v-model="directPostMessage"
+                rows="3"
+                placeholder="Message to post as Claude Bot"
+              ></textarea>
+            </div>
+            <button
+              class="button direct-post-button"
+              type="submit"
+              :disabled="directPostLoading || !directPostMessage.trim() || !(runtimeConfig?.allowedChannelIds?.length)"
+            >
+              {{ directPostLoading ? 'Posting...' : 'Post' }}
+            </button>
+          </form>
+          <div v-if="directPostStatus || directPostError" class="direct-post-feedback">
+            <span v-if="directPostStatus" class="success-text">{{ directPostStatus }}</span>
+            <span v-if="directPostError" class="error-text">{{ directPostError }}</span>
+          </div>
+        </section>
+
         <form class="filters" @submit.prevent="loadUpdates">
           <div class="field">
             <label>Status</label>

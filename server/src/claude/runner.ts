@@ -62,6 +62,14 @@ export async function runClaude(prompt: string, cwd: string): Promise<ClaudeResu
 }
 
 function fakeClaudeResponse(prompt: string) {
+  if (prompt.includes("AI-DLC Rule Search Intent Classifier")) {
+    return JSON.stringify({
+      rule_related: !/weather|server|maintenance|hello|offline/i.test(prompt),
+      non_rule_response:
+        "Status: not_applicable\n\nFake classifier decided this question is outside AI-DLC rule search scope, so the rule repository was not searched."
+    });
+  }
+
   if (prompt.includes("Rule Search Agent")) {
     return [
       "Status: partial",

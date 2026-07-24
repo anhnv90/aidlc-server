@@ -142,7 +142,7 @@ export class CommandHandler {
 
   private async executeQueuedJob(job: QueuedJob) {
     if (job.parsed.kind === "ask") {
-      await this.handleAsk(job.message, job.parsed.command.query, job.id);
+      await this.handleAsk(job.message, job.parsed.command, job.id);
       return;
     }
 
@@ -152,10 +152,10 @@ export class CommandHandler {
     await this.handleRuleUpdate(job.message, job.parsed.command, job.historyId, job.id);
   }
 
-  private async handleAsk(message: MattermostMessage, query: string, jobId: number) {
+  private async handleAsk(message: MattermostMessage, command: Extract<QueuedCommand, { kind: "ask" }>["command"], jobId: number) {
     try {
       log.info("Ask job started", { jobId, userId: message.userId, username: message.username });
-      const answer = await askRule(query);
+      const answer = await askRule(command.query, { classifyRuleScope: command.classifyRuleScope });
       await this.reply(message, withJobResponse(jobId, answer));
     } catch (err) {
       await this.reply(message, withJobResponse(jobId, `Rule search failed: ${errorMessage(err)}`));

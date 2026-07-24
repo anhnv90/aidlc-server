@@ -30,7 +30,7 @@ export const fakeChatStore = {
     });
   },
 
-  addBot(input: { channelId: string; message: string; rootId?: string }) {
+  addBot(input: { channelId: string; message: string; rootId?: string; attachment?: boolean }) {
     add({
       id: `fake-bot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       channelId: input.channelId,
@@ -38,7 +38,7 @@ export const fakeChatStore = {
       username: "claude",
       role: "bot",
       message: input.message,
-      attachments: [formatAttachment(input.message)],
+      attachments: input.attachment === false ? undefined : [formatAttachment(input.message)],
       rootId: input.rootId,
       createdAt: new Date().toISOString()
     });

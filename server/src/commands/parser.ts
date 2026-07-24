@@ -13,7 +13,16 @@ export function parseBotCommand(rawMessage: string, botUsername: string): Parsed
 
   const firstLine = withoutMention.split(/\r?\n/, 1)[0]?.trim() ?? "";
   const match = /^rule\s+(\S+)(?:\s+([\s\S]*))?$/i.exec(firstLine);
-  if (!match) return { kind: "ignored", reason: "not a rule command" };
+  if (!match) {
+    return {
+      kind: "ask",
+      command: {
+        type: "ask",
+        query: withoutMention,
+        classifyRuleScope: true
+      }
+    };
+  }
 
   const verb = match[1].toLowerCase();
   const inlineRest = (match[2] ?? "").trim();
@@ -28,7 +37,14 @@ export function parseBotCommand(rawMessage: string, botUsername: string): Parsed
     return parseRuleUpdate(verb, withoutMention.slice(firstLine.length).trim());
   }
 
-  return { kind: "help", reason: `unknown command: ${verb}` };
+  return {
+    kind: "ask",
+    command: {
+      type: "ask",
+      query: withoutMention,
+      classifyRuleScope: true
+    }
+  };
 }
 
 function parseRuleUpdate(action: RuleAction, body: string): ParsedCommand {
@@ -96,6 +112,8 @@ export function formatHelp(reason?: string) {
   return `${prefix}Supported commands:
 
 Ask/search:
+@claude <question>
+or
 @claude rule ask <question>
 
 Add:

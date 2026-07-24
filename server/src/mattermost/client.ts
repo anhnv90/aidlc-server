@@ -9,6 +9,11 @@ export type MattermostReply = {
   message: string;
 };
 
+export type MattermostDirectPost = {
+  channelId: string;
+  message: string;
+};
+
 export class MattermostClient {
   private readonly usernameCache = new Map<string, string>();
 
@@ -34,6 +39,42 @@ export class MattermostClient {
     }
 
     throw new Error("Mattermost post requires either MATTERMOST_BOT_TOKEN or MATTERMOST_INCOMING_WEBHOOK_URL");
+  }
+
+  async postPlainMessage(post: MattermostDirectPost) {
+    if (config.mattermost.fakeMode) {
+      fakeChatStore.addBot({ channelId: post.channelId, message: post.message, attachment: false });
+      log.info("Fake Mattermost direct post", {
+        channelId: post.channelId,
+        message: post.message
+      });
+      return { id: `fake-direct-post-${Date.now()}` };
+    }
+
+    if (!config.mattermost.baseUrl || !config.mattermost.botToken) {
+      throw new Error("Mattermost direct post requires MATTERMOST_BASE_URL and MATTERMOST_BOT_TOKEN");
+    }
+
+    const url = `${config.mattermost.baseUrl.replace(/\/$/, "")}/api/v4/posts`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${config.mattermost.botToken}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        channel_id: post.channelId,
+        message: post.message
+      })
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Mattermost direct post failed: HTTP ${response.status} ${body}`);
+    }
+
+    const result = (await response.json()) as { id?: unknown };
+    return { id: typeof result.id === "string" ? result.id : undefined };
   }
 
   private async postViaRestApi(reply: MattermostReply) {

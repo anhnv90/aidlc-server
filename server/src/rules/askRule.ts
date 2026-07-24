@@ -2,7 +2,23 @@ import { config } from "../config";
 import { runClaude } from "../claude/runner";
 import { searchRuleRepo } from "./repoSearch";
 
-export async function askRule(query: string) {
+type AskRuleOptions = {
+  classifyRuleScope?: boolean;
+};
+
+type RuleQuestionClassification = {
+  ruleRelated: boolean;
+  response: string;
+};
+
+export async function askRule(query: string, options: AskRuleOptions = {}) {
+  if (options.classifyRuleScope) {
+    const classification = await classifyRuleQuestion(query);
+    if (!classification.ruleRelated) {
+      return classification.response;
+    }
+  }
+
   if (config.claude.searchMode === "agent") {
     return askRuleWithAgent(query);
   }
@@ -55,6 +71,73 @@ Answer rules:
     throw new Error(result.stderr || `Claude exited with code ${result.exitCode}`);
   }
   return result.stdout || "(Claude returned an empty response)";
+}
+
+async function classifyRuleQuestion(query: string): Promise<RuleQuestionClassification> {
+  const prompt = `You are the AI-DLC Rule Search Intent Classifier.
+
+The user mentioned @claude in Mattermost with this message:
+${query}
+
+Task:
+Decide whether this message should search the AI-DLC rule repository.
+
+Classify as rule_related=true when the user is asking about:
+- AI-DLC rules, process, playbook, Definition of Done, testing rules, development lifecycle, reverse engineering, design/detailing rules, source restrictions, PR/checksheet requirements.
+- Whether a rule exists, where a rule is located, or how a project should follow AI-DLC rules.
+
+Classify as rule_related=false when the message is a greeting, a general chat message, a server operation request, a Mattermost usage question, a general programming question, or anything that does not require reading AI-DLC rule files.
+
+Rules:
+- Do not inspect local files.
+- Do not search the web.
+- Read the full user message before choosing the response language.
+- If the user explicitly asks for a response language, use that language for non_rule_response.
+- If no response language is requested, use the main language of the user's message for non_rule_response.
+- If the response language is ambiguous, use English.
+- Output JSON only, with this exact shape:
+{
+  "rule_related": true,
+  "non_rule_response": "Status: not_applicable\\n\\n..."
+}
+
+When rule_related=false, non_rule_response must start with exactly "Status: not_applicable" and should briefly say that the question is outside AI-DLC rule search scope, so the rule repository was not searched.
+When rule_related=true, non_rule_response can be an empty string.`;
+
+  const result = await runClaude(prompt, process.cwd());
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr || `Claude exited with code ${result.exitCode}`);
+  }
+
+  const parsed = parseClassifierJson(result.stdout);
+  if (!parsed) {
+    throw new Error(`Claude classifier returned invalid JSON: ${result.stdout || "(empty response)"}`);
+  }
+
+  return {
+    ruleRelated: parsed.rule_related,
+    response:
+      parsed.non_rule_response ||
+      "Status: not_applicable\n\nThis question is outside AI-DLC rule search scope, so the rule repository was not searched."
+  };
+}
+
+function parseClassifierJson(value: string) {
+  const compact = value.trim();
+  const jsonText = compact.match(/\{[\s\S]*\}/)?.[0] ?? compact;
+  try {
+    const parsed = JSON.parse(jsonText) as {
+      rule_related?: unknown;
+      non_rule_response?: unknown;
+    };
+    if (typeof parsed.rule_related !== "boolean") return null;
+    return {
+      rule_related: parsed.rule_related,
+      non_rule_response: typeof parsed.non_rule_response === "string" ? parsed.non_rule_response.trim() : ""
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function askRuleWithAgent(query: string) {

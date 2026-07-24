@@ -15,6 +15,7 @@ export type MattermostMessage = {
 export type AskCommand = {
   type: "ask";
   query: string;
+  classifyRuleScope?: boolean;
 };
 
 export type RuleUpdateCommand = {
@@ -62,4 +63,3 @@ export type RuleUpdateHistory = {
   createdAt: string;
   updatedAt: string;
 };
-
