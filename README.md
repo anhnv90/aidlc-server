@@ -6,11 +6,11 @@ Internal AI-DLC Mattermost bot server.
 
 - Receives Mattermost bot mentions in realtime via WebSocket.
 - Replies to Mattermost through REST API.
-- Supports agentic rule search in the AI-DLC repo.
+- Supports natural `@claude <question>` chat: Claude classifies the question, searches the AI-DLC repo for rule-related questions, and answers directly for non-rule questions.
 - Supports rule add/update/delete through Claude Code CLI (`claude -p`).
 - Creates Git branches and GitHub PRs for rule updates.
 - Stores rule update history in SQLite.
-- Serves a read-only dashboard on port `3003`.
+- Serves a dashboard on port `3003` with rule history and direct Mattermost posting.
 - Includes fake Mattermost mode for local testing before real admin credentials are ready.
 
 ## Tech stack
@@ -65,7 +65,7 @@ $body = @{
   userId = "fake-admin-user-id"
   username = "ThuyTT"
   channelId = "fake-channel-id"
-  message = "@claude rule ask browser based done rule da co chua?"
+  message = "@claude browser based done rule da co chua?"
 } | ConvertTo-Json
 
 Invoke-RestMethod -Method Post -Uri "http://localhost:3003/dev/fake-message" -ContentType "application/json" -Body $body
@@ -73,17 +73,25 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:3003/dev/fake-message" -Co
 
 ## Commands
 
-### Ask/search rule
+### Ask Claude / search rules
 
 Allowed for everyone in configured channels.
 
 ```text
+@claude rule browser test da co chua?
+
+or
+
+@claude hello, please explain what this bot can do
+
+or
+
 @claude rule ask rule browser test da co chua?
 ```
 
 ### Add rule
 
-Allowed only for `RULE_UPDATE_AUTHORIZED_USER_IDS`.
+Allowed only for `RULE_UPDATE_AUTHORIZED_USERNAMES`.
 
 ```text
 @claude rule add
@@ -126,8 +134,8 @@ MATTERMOST_BOT_TOKEN=<bot-token>
 MATTERMOST_BOT_USER_ID=<bot-user-id>
 MATTERMOST_BOT_USERNAME=claude
 MATTERMOST_ALLOWED_CHANNEL_IDS=<channel-id-1>,<channel-id-2>
-MATTERMOST_INCOMING_WEBHOOK_URL=https://<mattermost>/hooks/<incoming-webhook-key>
-RULE_UPDATE_AUTHORIZED_USER_IDS=<authorized-user-id>
+MATTERMOST_INCOMING_WEBHOOK_URL=
+RULE_UPDATE_AUTHORIZED_USERNAMES=<authorized-username>
 ```
 
 The server connects outbound to:

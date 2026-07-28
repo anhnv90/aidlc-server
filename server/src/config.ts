@@ -62,7 +62,6 @@ export type AppConfig = {
     command: string;
     timeoutMs: number;
     extraArgs: string[];
-    searchMode: "controlled" | "agent";
   };
 };
 
@@ -92,16 +91,9 @@ export const config: AppConfig = {
     fakeMode: getBoolean("CLAUDE_FAKE_MODE", true),
     command: getString("CLAUDE_COMMAND", "claude"),
     timeoutMs: getNumber("CLAUDE_TIMEOUT_MS", 300000),
-    extraArgs: getCsv("CLAUDE_EXTRA_ARGS"),
-    searchMode: getClaudeSearchMode()
+    extraArgs: getCsv("CLAUDE_EXTRA_ARGS")
   }
 };
-
-function getClaudeSearchMode(): "controlled" | "agent" {
-  const value = getString("CLAUDE_SEARCH_MODE", "controlled").toLowerCase();
-  if (value === "controlled" || value === "agent") return value;
-  throw new Error(`Invalid CLAUDE_SEARCH_MODE: ${value}. Expected controlled or agent.`);
-}
 
 export function validateConfig() {
   if (!existsSync(config.aidlcRepoPath)) {

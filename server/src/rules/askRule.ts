@@ -1,6 +1,5 @@
 import { config } from "../config";
 import { runClaude } from "../claude/runner";
-import { searchRuleRepo } from "./repoSearch";
 
 type AskRuleOptions = {
   classifyRuleScope?: boolean;
@@ -8,69 +7,17 @@ type AskRuleOptions = {
 
 type RuleQuestionClassification = {
   ruleRelated: boolean;
-  response: string;
 };
 
 export async function askRule(query: string, options: AskRuleOptions = {}) {
   if (options.classifyRuleScope) {
     const classification = await classifyRuleQuestion(query);
     if (!classification.ruleRelated) {
-      return classification.response;
+      return answerGeneralQuestion(query);
     }
   }
 
-  if (config.claude.searchMode === "agent") {
-    return askRuleWithAgent(query);
-  }
-
-  const hits = searchRuleRepo(query);
-  if (hits.length === 0) {
-    return answerNoSearchHits(query);
-  }
-
-  const context = hits
-    .map(
-      (hit, index) => `SOURCE ${index + 1}
-File: ${hit.file}
-Score: ${hit.score}
-Snippet:
-${hit.snippet}`
-    )
-    .join("\n\n---\n\n");
-
-  const prompt = `You are the AI-DLC Rule Search Agent.
-
-Task:
-Answer the user's natural-language question directly using ONLY the provided repository search results.
-Do not ask what the user wants to do.
-Do not mention the current git branch unless it is directly relevant to the answer.
-
-Question:
-${query}
-
-Repository search results:
-${context}
-
-Answer rules:
-- Do not search Mattermost history.
-- Do not use external web sources.
-- Read the full user question before choosing the response language.
-- If the user explicitly asks for a response language, answer in that requested language.
-- If no response language is requested, answer in the main language of the user's question.
-- If the response language is ambiguous, answer in English.
-- Keep the required status prefix exactly in English.
-- Start with one of: "Status: exists", "Status: partial", or "Status: not_found".
-- Include concrete source file paths from the provided search results.
-- Classify the result as one of: exists, partial, not_found.
-- If the rule only partially exists, explain what is missing.
-- Keep the answer short and practical.
-`;
-
-  const result = await runClaude(prompt, config.aidlcRepoPath);
-  if (result.exitCode !== 0) {
-    throw new Error(result.stderr || `Claude exited with code ${result.exitCode}`);
-  }
-  return result.stdout || "(Claude returned an empty response)";
+  return askRuleWithAgent(query);
 }
 
 async function classifyRuleQuestion(query: string): Promise<RuleQuestionClassification> {
@@ -97,12 +44,10 @@ Rules:
 - If the response language is ambiguous, use English.
 - Output JSON only, with this exact shape:
 {
-  "rule_related": true,
-  "non_rule_response": "Status: not_applicable\\n\\n..."
+  "rule_related": true
 }
 
-When rule_related=false, non_rule_response must start with exactly "Status: not_applicable" and should briefly say that the question is outside AI-DLC rule search scope, so the rule repository was not searched.
-When rule_related=true, non_rule_response can be an empty string.`;
+Do not answer the user's question in this classifier response. Only classify whether the AI-DLC rule repository is needed.`;
 
   const result = await runClaude(prompt, process.cwd());
   if (result.exitCode !== 0) {
@@ -115,10 +60,7 @@ When rule_related=true, non_rule_response can be an empty string.`;
   }
 
   return {
-    ruleRelated: parsed.rule_related,
-    response:
-      parsed.non_rule_response ||
-      "Status: not_applicable\n\nThis question is outside AI-DLC rule search scope, so the rule repository was not searched."
+    ruleRelated: parsed.rule_related
   };
 }
 
@@ -128,16 +70,44 @@ function parseClassifierJson(value: string) {
   try {
     const parsed = JSON.parse(jsonText) as {
       rule_related?: unknown;
-      non_rule_response?: unknown;
     };
     if (typeof parsed.rule_related !== "boolean") return null;
     return {
-      rule_related: parsed.rule_related,
-      non_rule_response: typeof parsed.non_rule_response === "string" ? parsed.non_rule_response.trim() : ""
+      rule_related: parsed.rule_related
     };
   } catch {
     return null;
   }
+}
+
+async function answerGeneralQuestion(query: string) {
+  const prompt = `You are Claude responding to a Mattermost mention.
+
+The user mentioned @claude with this message:
+${query}
+
+The message was classified as NOT requiring AI-DLC rule repository search.
+
+Task:
+Answer the user's question directly as a general assistant.
+
+Rules:
+- Do not search the AI-DLC rule repository.
+- Do not search Mattermost history.
+- Do not use external web sources.
+- Do not claim that a rule exists or does not exist because this is not a rule-search answer.
+- Do not ask what the user wants to do unless the message is truly ambiguous.
+- Read the full user question before choosing the response language.
+- If the user explicitly asks for a response language, answer in that requested language.
+- If no response language is requested, answer in the main language of the user's question.
+- If the response language is ambiguous, answer in English.
+- Keep the answer practical and concise.`;
+
+  const result = await runClaude(prompt, process.cwd());
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr || `Claude exited with code ${result.exitCode}`);
+  }
+  return result.stdout || "(Claude returned an empty response)";
 }
 
 async function askRuleWithAgent(query: string) {
@@ -166,33 +136,6 @@ Rules:
 - Include concrete source file paths and rule IDs/headings when found.
 - If the rule only partially exists, explain what is missing.
 - Keep the answer practical and concise.`;
-
-  const result = await runClaude(prompt, config.aidlcRepoPath);
-  if (result.exitCode !== 0) {
-    throw new Error(result.stderr || `Claude exited with code ${result.exitCode}`);
-  }
-  return result.stdout || "(Claude returned an empty response)";
-}
-
-async function answerNoSearchHits(query: string) {
-  const prompt = `You are the AI-DLC Rule Search Agent.
-
-The repository text search returned no related rule results for this Mattermost question:
-${query}
-
-Task:
-Answer directly that no related rule was found in the AI-DLC repository.
-
-Answer rules:
-- Do not search Mattermost history.
-- Do not use external web sources.
-- Read the full user question before choosing the response language.
-- If the user explicitly asks for a response language, answer in that requested language.
-- If no response language is requested, answer in the main language of the user's question.
-- If the response language is ambiguous, answer in English.
-- Keep the required status prefix exactly in English.
-- Start with exactly: "Status: not_found".
-- Keep the answer short and practical.`;
 
   const result = await runClaude(prompt, config.aidlcRepoPath);
   if (result.exitCode !== 0) {

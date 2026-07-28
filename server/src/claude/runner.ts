@@ -63,14 +63,17 @@ export async function runClaude(prompt: string, cwd: string): Promise<ClaudeResu
 
 function fakeClaudeResponse(prompt: string) {
   if (prompt.includes("AI-DLC Rule Search Intent Classifier")) {
+    const userMessage = extractPromptBlock(prompt, "The user mentioned @claude in Mattermost with this message:", "Task:");
     return JSON.stringify({
-      rule_related: !/weather|server|maintenance|hello|offline/i.test(prompt),
-      non_rule_response:
-        "Status: not_applicable\n\nFake classifier decided this question is outside AI-DLC rule search scope, so the rule repository was not searched."
+      rule_related: !/weather|server|maintenance|hello|offline/i.test(userMessage)
     });
   }
 
-  if (prompt.includes("Rule Search Agent")) {
+  if (prompt.includes("responding to a Mattermost mention")) {
+    return "Fake general assistant response: this question was classified as outside AI-DLC rule search, so Claude answered it directly.";
+  }
+
+  if (prompt.includes("Rule Search Agent") || prompt.includes("Claude Code running inside the AI-DLC repository")) {
     return [
       "Status: partial",
       "Summary: Fake mode found related Build and Test / NP-TST rules, but no strict browser-based Done gate.",
@@ -85,4 +88,12 @@ function fakeClaudeResponse(prompt: string) {
     "Fake Claude update completed.",
     "No files were changed because CLAUDE_FAKE_MODE=true."
   ].join("\n");
+}
+
+function extractPromptBlock(prompt: string, startMarker: string, endMarker: string) {
+  const start = prompt.indexOf(startMarker);
+  if (start < 0) return prompt;
+  const contentStart = start + startMarker.length;
+  const end = prompt.indexOf(endMarker, contentStart);
+  return prompt.slice(contentStart, end < 0 ? undefined : end).trim();
 }
