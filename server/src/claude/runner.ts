@@ -31,8 +31,16 @@ export async function runClaude(prompt: string, cwd: string): Promise<ClaudeResu
     let stdout = "";
     let stderr = "";
     let completed = false;
+    let timeout: NodeJS.Timeout;
 
-    const timeout = setTimeout(() => {
+    const finish = (exitCode: number | null) => {
+      if (completed) return;
+      completed = true;
+      clearTimeout(timeout);
+      resolve({ stdout: stdout.trim(), stderr: stderr.trim(), exitCode });
+    };
+
+    timeout = setTimeout(() => {
       if (completed) return;
       stderr += `\nClaude timed out after ${config.claude.timeoutMs}ms`;
       child.kill("SIGTERM");
@@ -50,13 +58,16 @@ export async function runClaude(prompt: string, cwd: string): Promise<ClaudeResu
       stderr += `\nClaude stdin error: ${err.message}`;
     });
 
+    child.on("error", (err) => {
+      stderr += `\nClaude process error: ${err.message}`;
+      finish(1);
+    });
+
     child.stdin.write(prompt);
     child.stdin.end();
 
     child.on("close", (exitCode) => {
-      completed = true;
-      clearTimeout(timeout);
-      resolve({ stdout: stdout.trim(), stderr: stderr.trim(), exitCode });
+      finish(exitCode);
     });
   });
 }

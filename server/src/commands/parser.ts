@@ -30,7 +30,7 @@ export function parseBotCommand(rawMessage: string, botUsername: string): Parsed
   if (verb === "ask" || verb === "search") {
     const query = inlineRest || withoutMention.slice(firstLine.length).trim();
     if (!query) return { kind: "help", reason: "missing search query" };
-    return { kind: "ask", command: { type: "ask", query } };
+    return { kind: "ask", command: { type: "ask", query, classifyRuleScope: true } };
   }
 
   if (verb === "add" || verb === "update" || verb === "delete") {

@@ -63,13 +63,16 @@ export const GRAPH_MCP_TOOLS = [
   },
   {
     name: "trace_screen",
-    description: "Trace a UI screen to AJAX actions and backend endpoints when the graph contains that mapping.",
+    description:
+      "Trace a UI screen to AJAX actions, Java endpoints, exposing backend methods, handler/service type candidates, injected repositories, and repository/table evidence when present.",
     inputSchema: {
       type: "object",
       properties: {
         screen: { type: "string" },
         project: { type: "string" },
-        limit: { type: "integer", minimum: 1, maximum: 300 }
+        limit: { type: "integer", minimum: 1, maximum: 300 },
+        include_backend: { type: "boolean" },
+        backend_limit: { type: "integer", minimum: 1, maximum: 20 }
       },
       required: ["screen"],
       additionalProperties: false

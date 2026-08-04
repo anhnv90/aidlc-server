@@ -138,6 +138,14 @@ const app = createApp({
 
     const selectedId = computed(() => selected.value?.id ?? null);
     const isTestPage = computed(() => route.value === "test");
+    const menuOpen = ref(false);
+    const pageTitle = computed(() => (isTestPage.value ? "Mattermost Test Chat" : "Mattermost chat history"));
+    const pageSubtitle = computed(() =>
+      isTestPage.value
+        ? "Fake Mattermost chat for rule ask/add/update/delete commands."
+        : "Send Mattermost messages and review rule update history."
+    );
+    const apiStatusLabel = computed(() => (runtimeConfig.value ? "API ready" : "Loading API"));
 
     async function loadAuthStatus() {
       try {
@@ -319,7 +327,12 @@ const app = createApp({
 
     function navigate(nextRoute: "history" | "test") {
       route.value = nextRoute;
+      menuOpen.value = false;
       window.history.pushState(null, "", nextRoute === "test" ? "/test-page" : "/");
+    }
+
+    function toggleMenu() {
+      menuOpen.value = !menuOpen.value;
     }
 
     onMounted(() => {
@@ -346,6 +359,10 @@ const app = createApp({
     return {
       route,
       isTestPage,
+      menuOpen,
+      pageTitle,
+      pageSubtitle,
+      apiStatusLabel,
       authChecked,
       authenticated,
       authUsername,
@@ -372,6 +389,7 @@ const app = createApp({
       loadUpdates,
       loginUser,
       logoutUser,
+      toggleMenu,
       selectUpdate,
       formatDate,
       navigate,
@@ -386,7 +404,7 @@ const app = createApp({
     <main v-if="authChecked && !authenticated" class="login-page">
       <form class="login-card" @submit.prevent="loginUser">
         <div>
-          <h1>AIDLC Server</h1>
+          <h1>AI-DLC Server Management</h1>
           <p>Sign in to manage Mattermost, rules, and the source graph.</p>
         </div>
         <label>
@@ -406,18 +424,36 @@ const app = createApp({
 
     <main v-else-if="authChecked" class="page">
       <header class="topbar">
-        <div>
-          <h1>{{ isTestPage ? 'Mattermost Test Chat' : 'Mattermost Dashboard' }}</h1>
-          <p>{{ isTestPage ? 'Fake Mattermost chat for rule ask/add/update/delete commands.' : 'Send Mattermost messages and review rule update history.' }}</p>
+        <div class="topbar-left">
+          <button
+            class="hamburger-button"
+            type="button"
+            :aria-expanded="menuOpen ? 'true' : 'false'"
+            aria-label="Open navigation menu"
+            @click="toggleMenu"
+          >
+            <span class="menu-icon" aria-hidden="true">&#9776;</span>
+          </button>
+          <h1>AI-DLC Server Management</h1>
+          <nav class="hamburger-menu" :class="{ open: menuOpen }">
+            <button class="menu-link" :class="{ active: route === 'history' }" @click="navigate('history')">Mattermost chat history</button>
+            <a class="menu-link" href="/scan.html">Graph Scan</a>
+            <a class="menu-link" href="/graph-viewer.html">Graph Viewer</a>
+          </nav>
         </div>
-        <nav class="app-menu">
-          <button class="menu-link" :class="{ active: route === 'history' }" @click="navigate('history')">Mattermost</button>
-          <button class="menu-link" :class="{ active: route === 'test' }" @click="navigate('test')">Test Chat</button>
-          <a class="menu-link" href="/scan.html">Graph Scan</a>
-          <a class="menu-link" href="/graph-viewer.html">Graph Viewer</a>
-          <button class="menu-link logout" @click="logoutUser">Logout {{ authUsername || '' }}</button>
-        </nav>
+        <div class="topbar-user">
+          <span class="user-name">{{ authUsername || 'admin' }}</span>
+          <button class="logout-button" type="button" @click="logoutUser">Logout</button>
+        </div>
       </header>
+
+      <section class="page-heading">
+        <div>
+          <h2>{{ pageTitle }}</h2>
+          <p>{{ pageSubtitle }}</p>
+        </div>
+        <span class="page-status"><span class="dot ready"></span>{{ apiStatusLabel }}</span>
+      </section>
 
       <section v-if="isTestPage" class="content">
         <div class="runtime-strip">
@@ -491,7 +527,6 @@ const app = createApp({
         <section class="panel direct-post-panel">
           <div class="panel-header">
             <h2>Mattermost Post</h2>
-            <span class="muted">{{ runtimeConfig?.mattermostFakeMode ? 'fake mode' : 'real mode' }}</span>
           </div>
           <form class="direct-post-form" @submit.prevent="sendDirectPost">
             <div class="field channel-field">
@@ -633,7 +668,7 @@ const app = createApp({
 
     <main v-else class="login-page">
       <div class="login-card">
-        <h1>AIDLC Server</h1>
+        <h1>AI-DLC Server Management</h1>
         <p>Loading...</p>
       </div>
     </main>

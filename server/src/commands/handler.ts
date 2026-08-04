@@ -158,7 +158,9 @@ export class CommandHandler {
       const answer = await askRule(command.query, { classifyRuleScope: command.classifyRuleScope });
       await this.reply(message, withJobResponse(jobId, answer));
     } catch (err) {
-      await this.reply(message, withJobResponse(jobId, `Rule search failed: ${errorMessage(err)}`));
+      const msg = errorMessage(err);
+      log.error("Ask job failed", { jobId, error: msg });
+      await this.reply(message, withJobResponse(jobId, `Rule search failed: ${msg}`));
     }
   }
 

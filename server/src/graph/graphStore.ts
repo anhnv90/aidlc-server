@@ -207,11 +207,15 @@ export class GraphStore {
         const params: SqlValue[] = [];
 
         if (direction === "both" || direction === "out") {
-          sqlParts.push(`select from_id, to_id, type, properties from edges where from_id in (${placeholders})`);
+          sqlParts.push(
+            `select from_id, to_id, type, properties_json as properties from edges where from_id in (${placeholders}) and type <> 'PROJECT_CONTAINS_NODE'`
+          );
           params.push(...batch);
         }
         if (direction === "both" || direction === "in") {
-          sqlParts.push(`select from_id, to_id, type, properties from edges where to_id in (${placeholders})`);
+          sqlParts.push(
+            `select from_id, to_id, type, properties_json as properties from edges where to_id in (${placeholders}) and type <> 'PROJECT_CONTAINS_NODE'`
+          );
           params.push(...batch);
         }
 
@@ -246,11 +250,12 @@ export class GraphStore {
     }
   }
 
-  traceScreen(args: { screen?: string; project?: string; limit?: number }) {
+  traceScreen(args: { screen?: string; project?: string; limit?: number; include_backend?: boolean; backend_limit?: number }) {
     const screen = String(args.screen ?? "").trim();
     if (!screen) throw new Error("screen is required");
     const limit = this.limit(args.limit);
-    const params: SqlValue[] = [screen, `%:${screen}`];
+    const backendLimit = Math.min(this.limit(args.backend_limit, 5), 20);
+    const params: SqlValue[] = [screen, `%:${screen}`, `%:${screen}/%`];
     const projectSql = args.project ? " and screen_project = ?" : "";
     if (args.project) params.push(args.project);
 
@@ -261,14 +266,27 @@ export class GraphStore {
         `
         select *
         from v_screen_ajax_endpoint
-        where (screen = ? or screen like ?)
+        where (screen = ? or screen like ? or screen like ?)
         ${projectSql}
         order by screen, ajax_name, ui_endpoint, java_endpoint
         limit ?
         `,
         [...params, limit]
       );
-      return { screen, rows };
+      const backendByEndpoint: Record<string, unknown> = {};
+      if (args.include_backend !== false) {
+        const endpointIds = uniqueStrings(rows.map((row) => row.java_endpoint_id)).slice(0, backendLimit);
+        for (const endpointId of endpointIds) {
+          backendByEndpoint[endpointId] = this.backendForEndpoint(db, endpointId, backendLimit);
+        }
+      }
+      return {
+        screen,
+        rows,
+        backend_by_java_endpoint: backendByEndpoint,
+        trace_hint:
+          "Use rows[].java_endpoint_id to inspect backend_by_java_endpoint. If more detail is needed, call get_node or expand_node on method/type/repository ids returned here."
+      };
     } finally {
       db.close();
     }
@@ -373,6 +391,155 @@ export class GraphStore {
     }
   }
 
+  private backendForEndpoint(db: Database.Database, endpointId: string, limit: number) {
+    const endpoint = db.prepare("select * from nodes where id = ?").get(endpointId) as Row | undefined;
+    const methodRows = this.rows(
+      db,
+      `
+      select m.*
+      from edges e
+      join nodes m on m.id = e.from_id
+      where e.to_id = ? and e.type = 'EXPOSES_ENDPOINT'
+      order by m.fqn, m.name
+      limit ?
+      `,
+      [endpointId, limit]
+    );
+
+    return {
+      endpoint: endpoint ? this.compactNode(endpoint) : { id: endpointId, found: false },
+      exposing_methods: methodRows.map((method) => this.backendForMethod(db, method, limit))
+    };
+  }
+
+  private backendForMethod(db: Database.Database, method: Row, limit: number) {
+    const methodId = String(method.id);
+    const ownerRows = this.rows(
+      db,
+      `
+      select t.*
+      from edges e
+      join nodes t on t.id = e.from_id
+      where e.to_id = ? and e.type = 'DECLARES_METHOD'
+      order by t.fqn, t.name
+      limit 3
+      `,
+      [methodId]
+    );
+    const relatedRows = this.rows(
+      db,
+      `
+      select e.type, e.properties_json as properties, n.id as node_id, n.kind, n.name, n.fqn, n.path, n.project
+      from edges e
+      left join nodes n on n.id = e.to_id
+      where e.from_id = ?
+        and e.type in (
+          'METHOD_CALLS_FIELD',
+          'METHOD_CALLS_TYPE',
+          'METHOD_STATIC_CALLS_TYPE',
+          'METHOD_NEWS_TYPE',
+          'METHOD_USES_TYPE'
+        )
+      order by e.type, n.kind, n.name
+      limit ?
+      `,
+      [methodId, Math.min(limit * 3, MAX_LIMIT)]
+    );
+    const javaTypeIds = uniqueStrings(
+      relatedRows.filter((row) => row.kind === "JavaType").map((row) => row.node_id)
+    ).slice(0, limit);
+
+    return {
+      method: this.compactNode(method),
+      owner_types: ownerRows.map((row) => this.compactNode(row)),
+      related_backend_nodes: relatedRows.map((row) => this.compactRelatedEdge(row)),
+      related_type_details: javaTypeIds.map((typeId) => this.backendForType(db, typeId, limit))
+    };
+  }
+
+  private backendForType(db: Database.Database, typeId: string, limit: number) {
+    const type = db.prepare("select * from nodes where id = ?").get(typeId) as Row | undefined;
+    const declaredMethods = this.rows(
+      db,
+      `
+      select m.id, m.kind, m.name, m.fqn, m.path, m.project, m.line
+      from edges e
+      join nodes m on m.id = e.to_id
+      where e.from_id = ? and e.type = 'DECLARES_METHOD'
+      order by
+        case when lower(m.name) in ('handle', 'execute') then 0 else 1 end,
+        m.name
+      limit ?
+      `,
+      [typeId, limit]
+    );
+    const injectedTypes = this.rows(
+      db,
+      `
+      select tr.id, tr.kind, tr.name, tr.fqn, tr.path, tr.project, e.properties_json as properties
+      from edges e
+      join nodes tr on tr.id = e.to_id
+      where e.from_id = ? and e.type = 'INJECTS'
+      order by tr.name
+      limit ?
+      `,
+      [typeId, limit]
+    );
+    const fields = this.rows(
+      db,
+      `
+      select f.id, f.kind, f.name, f.fqn, f.path, f.project, f.line
+      from edges e
+      join nodes f on f.id = e.to_id
+      where e.from_id = ? and e.type = 'DECLARES_FIELD'
+      order by f.name
+      limit ?
+      `,
+      [typeId, limit]
+    );
+    const repositoryNames = uniqueStrings([
+      ...injectedTypes.map((row) => row.name),
+      ...fields.map((row) => row.name)
+    ]).filter((name) => /repository/i.test(name));
+
+    return {
+      type: type ? this.compactNode(type) : { id: typeId, found: false },
+      declared_methods: declaredMethods.map((row) => this.compactNode(row)),
+      injected_types: injectedTypes.map((row) => this.compactRelatedEdge({ ...row, node_id: row.id })),
+      fields: fields.map((row) => this.compactNode(row)),
+      repository_persistence: this.repositoryPersistenceForNames(db, repositoryNames, limit)
+    };
+  }
+
+  private repositoryPersistenceForNames(db: Database.Database, names: string[], limit: number) {
+    const results: Row[] = [];
+    const seen = new Set<string>();
+    for (const name of names.slice(0, limit)) {
+      const like = `%${name}%`;
+      const rows = this.rows(
+        db,
+        `
+        select *
+        from v_repository_persistence
+        where target_name = ?
+           or repository_name like ?
+           or repository_fqn like ?
+        order by repository_name, relation, target_name
+        limit ?
+        `,
+        [name, like, like, limit]
+      );
+      for (const row of rows) {
+        const key = JSON.stringify([row.repository_id, row.relation, row.target_id, row.target_name]);
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push(row);
+        }
+      }
+    }
+    return results.slice(0, limit * 2);
+  }
+
   private open() {
     const db = new Database(this.dbPath, { readonly: true, fileMustExist: true });
     db.pragma("query_only = ON");
@@ -448,7 +615,7 @@ export class GraphStore {
     return {
       ...item,
       labels: this.loads(item.labels, []),
-      properties: this.loads(item.properties, {})
+      properties: this.loads(item.properties ?? item.properties_json, {})
     };
   }
 
@@ -456,7 +623,21 @@ export class GraphStore {
     const item = this.plain(row);
     return {
       ...item,
-      properties: this.loads(item.properties, {})
+      properties: this.loads(item.properties ?? item.properties_json, {})
+    };
+  }
+
+  private compactRelatedEdge(row: Row) {
+    const item = this.plain(row);
+    return {
+      type: item.type,
+      node_id: item.node_id,
+      kind: item.kind,
+      name: item.name,
+      fqn: item.fqn,
+      path: item.path,
+      project: item.project,
+      properties: this.loads(item.properties ?? item.properties_json, {})
     };
   }
 
@@ -487,4 +668,14 @@ export class GraphStore {
     if (!Number.isFinite(parsed)) return defaultValue;
     return Math.max(1, Math.min(Math.trunc(parsed), MAX_LIMIT));
   }
+}
+
+function uniqueStrings(values: unknown[]) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+    )
+  );
 }

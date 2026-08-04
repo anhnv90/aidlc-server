@@ -549,9 +549,9 @@ export class GraphScanService {
       scanOptions: {
         buildBusinessGraph: true,
         importSqlite: true,
-        scanJoern: false,
-        verifyCpg: false,
-        pullJoernImage: false
+        scanJoern: true,
+        verifyCpg: true,
+        pullJoernImage: true
       },
       pythonExe: config.graph.pythonExe,
       joernImage: config.graph.joernImage,
