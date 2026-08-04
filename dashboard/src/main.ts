@@ -44,6 +44,11 @@ type RuntimeConfig = {
   claudeFakeMode: boolean;
 };
 
+type AuthStatus = {
+  authenticated: boolean;
+  username: string | null;
+};
+
 const samples = {
   ask: "@claude rule về browser-based definition of done đã có chưa?",
   add: `@claude rule add
@@ -100,6 +105,13 @@ function escapeHtml(value: string) {
 const app = createApp({
   setup() {
     const route = ref(window.location.pathname === "/test-page" ? "test" : "history");
+    const authChecked = ref(false);
+    const authenticated = ref(false);
+    const authUsername = ref<string | null>(null);
+    const loginUsername = ref("admin");
+    const loginPassword = ref("");
+    const loginLoading = ref(false);
+    const loginError = ref("");
 
     const updates = ref<RuleUpdate[]>([]);
     const selected = ref<RuleUpdate | null>(null);
@@ -126,6 +138,64 @@ const app = createApp({
 
     const selectedId = computed(() => selected.value?.id ?? null);
     const isTestPage = computed(() => route.value === "test");
+
+    async function loadAuthStatus() {
+      try {
+        const res = await fetch("/api/auth/status");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as AuthStatus;
+        authenticated.value = data.authenticated;
+        authUsername.value = data.username;
+      } catch {
+        authenticated.value = false;
+        authUsername.value = null;
+      } finally {
+        authChecked.value = true;
+      }
+    }
+
+    async function loginUser() {
+      loginLoading.value = true;
+      loginError.value = "";
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            username: loginUsername.value,
+            password: loginPassword.value
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        authenticated.value = true;
+        authUsername.value = data.username ?? loginUsername.value;
+        loginPassword.value = "";
+        await loadInitialData();
+      } catch (err) {
+        loginError.value = err instanceof Error ? err.message : String(err);
+      } finally {
+        loginLoading.value = false;
+      }
+    }
+
+    async function logoutUser() {
+      await fetch("/api/auth/logout", { method: "POST" });
+      authenticated.value = false;
+      authUsername.value = null;
+      runtimeConfig.value = null;
+      updates.value = [];
+      selected.value = null;
+      chatMessages.value = [];
+      window.history.pushState(null, "", "/");
+      route.value = "history";
+    }
+
+    async function loadInitialData() {
+      await loadRuntimeConfig();
+      await loadUpdates();
+      await loadChatMessages();
+    }
 
     async function loadRuntimeConfig() {
       const res = await fetch("/api/runtime-config");
@@ -253,11 +323,13 @@ const app = createApp({
     }
 
     onMounted(() => {
-      void loadRuntimeConfig();
-      void loadUpdates();
-      void loadChatMessages();
+      void loadAuthStatus().then(() => {
+        if (authenticated.value) {
+          void loadInitialData();
+        }
+      });
       chatPollTimer = setInterval(() => {
-        if (route.value === "test") {
+        if (authenticated.value && route.value === "test") {
           void loadChatMessages();
           void loadUpdates();
         }
@@ -274,6 +346,13 @@ const app = createApp({
     return {
       route,
       isTestPage,
+      authChecked,
+      authenticated,
+      authUsername,
+      loginUsername,
+      loginPassword,
+      loginLoading,
+      loginError,
       updates,
       selected,
       selectedId,
@@ -291,6 +370,8 @@ const app = createApp({
       directPostStatus,
       directPostError,
       loadUpdates,
+      loginUser,
+      logoutUser,
       selectUpdate,
       formatDate,
       navigate,
@@ -302,15 +383,39 @@ const app = createApp({
     };
   },
   template: `
-    <main class="page">
+    <main v-if="authChecked && !authenticated" class="login-page">
+      <form class="login-card" @submit.prevent="loginUser">
+        <div>
+          <h1>AIDLC Server</h1>
+          <p>Sign in to manage Mattermost, rules, and the source graph.</p>
+        </div>
+        <label>
+          <span>Username</span>
+          <input v-model="loginUsername" autocomplete="username" autofocus />
+        </label>
+        <label>
+          <span>Password</span>
+          <input v-model="loginPassword" type="password" autocomplete="current-password" />
+        </label>
+        <p v-if="loginError" class="login-error">{{ loginError }}</p>
+        <button class="button" type="submit" :disabled="loginLoading">
+          {{ loginLoading ? 'Signing in...' : 'Login' }}
+        </button>
+      </form>
+    </main>
+
+    <main v-else-if="authChecked" class="page">
       <header class="topbar">
         <div>
-          <h1>{{ isTestPage ? 'Mattermost Test Page' : 'AI-DLC Rule Update History' }}</h1>
-          <p>{{ isTestPage ? 'Fake Mattermost chat for rule ask/add/update/delete commands.' : 'Dashboard for Mattermost-triggered rule changes and direct bot posts.' }}</p>
+          <h1>{{ isTestPage ? 'Mattermost Test Chat' : 'Mattermost Dashboard' }}</h1>
+          <p>{{ isTestPage ? 'Fake Mattermost chat for rule ask/add/update/delete commands.' : 'Send Mattermost messages and review rule update history.' }}</p>
         </div>
-        <nav class="nav">
-          <button class="nav-button" :class="{ active: route === 'history' }" @click="navigate('history')">History</button>
-          <button class="nav-button" :class="{ active: route === 'test' }" @click="navigate('test')">Test Page</button>
+        <nav class="app-menu">
+          <button class="menu-link" :class="{ active: route === 'history' }" @click="navigate('history')">Mattermost</button>
+          <button class="menu-link" :class="{ active: route === 'test' }" @click="navigate('test')">Test Chat</button>
+          <a class="menu-link" href="/scan.html">Graph Scan</a>
+          <a class="menu-link" href="/graph-viewer.html">Graph Viewer</a>
+          <button class="menu-link logout" @click="logoutUser">Logout {{ authUsername || '' }}</button>
         </nav>
       </header>
 
@@ -524,6 +629,13 @@ const app = createApp({
           </section>
         </div>
       </section>
+    </main>
+
+    <main v-else class="login-page">
+      <div class="login-card">
+        <h1>AIDLC Server</h1>
+        <p>Loading...</p>
+      </div>
     </main>
   `
 });

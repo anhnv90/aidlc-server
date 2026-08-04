@@ -10,6 +10,8 @@ Internal AI-DLC Mattermost bot server.
 - Supports rule add/update/delete through Claude Code CLI (`claude -p`).
 - Creates Git branches and GitHub PRs for rule updates.
 - Stores rule update history in SQLite.
+- Serves the AST/business graph MCP endpoint for Claude Desktop on the same HTTP server.
+- Serves the graph scan UI and graph viewer on the same HTTP server.
 - Serves a dashboard on port `3003` with rule history and direct Mattermost posting.
 - Includes fake Mattermost mode for local testing before real admin credentials are ready.
 
@@ -36,6 +38,9 @@ Open:
 ```text
 http://localhost:3003
 http://localhost:3003/test-page
+http://localhost:3003/scan.html
+http://localhost:3003/graph-viewer.html
+http://localhost:3003/api/graph/health
 ```
 
 Logs are written to:
@@ -43,6 +48,56 @@ Logs are written to:
 ```text
 logs/server.log
 logs/error.log
+```
+
+## Graph and MCP integration
+
+The Mattermost bot, graph scan UI, graph viewer, and MCP endpoint now run from the same `aidlc-server` process.
+
+Default graph settings:
+
+```text
+AUTH_USERNAME=admin
+AUTH_PASSWORD=admin123
+AUTH_SESSION_TTL_HOURS=12
+GRAPH_ROOT_PATH=D:\ukvn\src\ai.dlc\hr.ast-graph
+GRAPH_SQLITE_DB_PATH=D:\ukvn\src\ai.dlc\hr.ast-graph\business-graph\graph.sqlite
+GRAPH_PYTHON_EXE=C:\Users\anhnv\AppData\Local\Programs\Python\Python312\python.exe
+GRAPH_JOERN_IMAGE=ghcr.io/joernio/joern:nightly
+GRAPH_MCP_ENDPOINT=/mcp
+```
+
+The web UI uses a simple server-side session cookie. The default login is:
+
+```text
+admin / admin123
+```
+
+The MCP endpoint remains available without this browser login so Claude Desktop can connect through `/mcp`.
+
+Claude Desktop in the same LAN can connect to:
+
+```text
+http://<server-ip>:3003/mcp
+```
+
+The old standalone graph servers are no longer required for the integrated flow:
+
+```text
+D:\ukvn\src\ai.dlc\hr.ast-graph\start-scan-server.bat
+D:\ukvn\src\ai.dlc\hr.ast-graph\mcp-server\start-http-mcp-server.bat
+```
+
+Scan UI:
+
+```text
+http://localhost:3003/scan.html
+```
+
+Graph viewer:
+
+```text
+http://localhost:3003/graph-viewer.html
 ```
 
 ## Fake Mattermost tests
@@ -73,7 +128,7 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:3003/dev/fake-message" -Co
 
 ## Commands
 
-### Ask Claude / search rules
+### Ask Claude / search rules and source graph
 
 Allowed for everyone in configured channels.
 
@@ -87,7 +142,26 @@ or
 or
 
 @claude rule ask rule browser test da co chua?
+
+or
+
+@claude màn hình JAM001 gọi endpoint nào?
+
+or
+
+@claude RemandCommandHandler xử lý nghiệp vụ gì?
+
+or
+
+@claude theo rule AIDLC thì flow JAM001 đã đủ Done chưa?
 ```
+
+The bot classifies each natural-language question as `rule`, `source_graph`, `mixed`, or `general`.
+
+- `rule`: Claude inspects the AI-DLC rule repository.
+- `source_graph`: the server reads the SQLite business/source graph and passes graph evidence to Claude.
+- `mixed`: Claude combines rule repository evidence with graph evidence.
+- `general`: Claude answers without reading rules or graph.
 
 ### Add rule
 

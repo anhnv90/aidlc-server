@@ -39,6 +39,19 @@ export type AppConfig = {
   serverPort: number;
   dashboardDistDir: string;
   sqliteDbPath: string;
+  auth: {
+    username: string;
+    password: string;
+    sessionTtlHours: number;
+  };
+  graph: {
+    rootPath: string;
+    businessGraphDir: string;
+    sqliteDbPath: string;
+    pythonExe: string;
+    joernImage: string;
+    mcpEndpoint: string;
+  };
   mattermost: {
     fakeMode: boolean;
     baseUrl: string;
@@ -69,6 +82,12 @@ export const config: AppConfig = {
   serverPort: getNumber("SERVER_PORT", 3003),
   dashboardDistDir: resolveFromCwd(getString("DASHBOARD_DIST_DIR", "./dist/dashboard")),
   sqliteDbPath: resolveFromCwd(getString("SQLITE_DB_PATH", "./data/aidlc-server.db")),
+  auth: {
+    username: getString("AUTH_USERNAME", "admin"),
+    password: getString("AUTH_PASSWORD", "admin123"),
+    sessionTtlHours: getNumber("AUTH_SESSION_TTL_HOURS", 12)
+  },
+  graph: buildGraphConfig(),
   mattermost: {
     fakeMode: getBoolean("MATTERMOST_FAKE_MODE", true),
     baseUrl: getString("MATTERMOST_BASE_URL"),
@@ -95,9 +114,25 @@ export const config: AppConfig = {
   }
 };
 
+function buildGraphConfig() {
+  const rootPath = resolveFromCwd(getString("GRAPH_ROOT_PATH", "../hr.ast-graph"));
+  const businessGraphDir = resolve(rootPath, "business-graph");
+  return {
+    rootPath,
+    businessGraphDir,
+    sqliteDbPath: resolve(getString("GRAPH_SQLITE_DB_PATH", resolve(businessGraphDir, "graph.sqlite"))),
+    pythonExe: getString("GRAPH_PYTHON_EXE", "C:\\Users\\anhnv\\AppData\\Local\\Programs\\Python\\Python312\\python.exe"),
+    joernImage: getString("GRAPH_JOERN_IMAGE", "ghcr.io/joernio/joern:nightly"),
+    mcpEndpoint: normalizeEndpoint(getString("GRAPH_MCP_ENDPOINT", "/mcp"))
+  };
+}
+
 export function validateConfig() {
   if (!existsSync(config.aidlcRepoPath)) {
     throw new Error(`AIDLC_REPO_PATH does not exist: ${config.aidlcRepoPath}`);
+  }
+  if (!existsSync(config.graph.rootPath)) {
+    throw new Error(`GRAPH_ROOT_PATH does not exist: ${config.graph.rootPath}`);
   }
   if (!config.mattermost.fakeMode) {
     if (!config.mattermost.baseUrl) throw new Error("MATTERMOST_BASE_URL is required in real mode");
@@ -113,4 +148,9 @@ export function validateConfig() {
 
 function normalizeUsername(value: string) {
   return value.trim().replace(/^@/, "").toLowerCase();
+}
+
+function normalizeEndpoint(value: string) {
+  const endpoint = value.trim() || "/mcp";
+  return endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 }

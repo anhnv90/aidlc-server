@@ -8,6 +8,10 @@ import { CommandHandler } from "../commands/handler";
 import { log } from "../log";
 import { fakeChatStore } from "../mattermost/fakeChatStore";
 import { MattermostClient } from "../mattermost/client";
+import { GraphRoutes } from "../graph/graphRoutes";
+import { authStatus, isAuthenticated, login, logout, writeAuthCookie } from "../auth/session";
+
+const graphRoutes = new GraphRoutes();
 
 export function startHttpServer(
   history: RuleUpdateHistoryStore,
@@ -40,6 +44,31 @@ async function route(
   try {
     if (req.method === "GET" && url.pathname === "/health") {
       sendJson(res, { status: "ok", time: new Date().toISOString() });
+      return;
+    }
+
+    if (url.pathname === config.graph.mcpEndpoint && (await graphRoutes.handle(req, res, url))) {
+      return;
+    }
+
+    if (await handleAuthRoute(req, res, url)) {
+      return;
+    }
+
+    if (!isAuthenticated(req) && !isPublicAssetRequest(req, url)) {
+      if (url.pathname.startsWith("/api/")) {
+        sendJson(res, { error: "unauthorized" }, 401);
+      } else if (isDashboardShellRequest(req, url)) {
+        serveStatic(url.pathname, res);
+      } else if (req.method === "GET") {
+        redirect(res, "/");
+      } else {
+        sendJson(res, { error: "unauthorized" }, 401);
+      }
+      return;
+    }
+
+    if (await graphRoutes.handle(req, res, url)) {
       return;
     }
 
@@ -141,6 +170,46 @@ async function route(
   } catch (err) {
     sendJson(res, { error: err instanceof Error ? err.message : String(err) }, 500);
   }
+}
+
+async function handleAuthRoute(req: IncomingMessage, res: ServerResponse, url: URL) {
+  if (req.method === "GET" && url.pathname === "/api/auth/status") {
+    sendJson(res, authStatus(req));
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/login") {
+    const body = await readJsonBody(req);
+    const session = login(String(body.username ?? ""), String(body.password ?? ""));
+    if (!session) {
+      sendJson(res, { error: "invalid_credentials" }, 401);
+      return true;
+    }
+    writeAuthCookie(res, session.cookie);
+    sendJson(res, { authenticated: true, username: session.username, expiresAt: new Date(session.expiresAt).toISOString() });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/logout") {
+    writeAuthCookie(res, logout(req));
+    sendJson(res, { authenticated: false });
+    return true;
+  }
+
+  return false;
+}
+
+function isPublicAssetRequest(req: IncomingMessage, url: URL) {
+  if (req.method !== "GET") return false;
+  return (
+    url.pathname.startsWith("/assets/") ||
+    url.pathname === "/favicon.ico" ||
+    url.pathname === "/src/main.ts"
+  );
+}
+
+function isDashboardShellRequest(req: IncomingMessage, url: URL) {
+  return req.method === "GET" && (url.pathname === "/" || url.pathname === "/test-page");
 }
 
 function toFakeMessage(body: unknown): MattermostMessage {
@@ -249,6 +318,11 @@ function sendJson(res: ServerResponse, body: unknown, statusCode = 200) {
 function sendText(res: ServerResponse, body: string, statusCode = 200) {
   res.writeHead(statusCode, { "content-type": "text/plain; charset=utf-8" });
   res.end(body);
+}
+
+function redirect(res: ServerResponse, location: string) {
+  res.writeHead(302, { location });
+  res.end();
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

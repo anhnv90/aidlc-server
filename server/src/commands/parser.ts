@@ -116,6 +116,14 @@ Ask/search:
 or
 @claude rule ask <question>
 
+Source graph examples:
+@claude màn hình JAM001 gọi endpoint nào?
+@claude RemandCommandHandler xử lý nghiệp vụ gì?
+@claude repository nào dùng bảng JRQMT_APP_SETTING?
+
+Mixed rule/source example:
+@claude theo rule AIDLC thì flow JAM001 đã đủ Done chưa?
+
 Add:
 @claude rule add
 rule_id: DOD-UI-01

@@ -56,6 +56,9 @@ if "%NEW_PID%"=="" (
 echo %NEW_PID%>"%PID_FILE%"
 echo aidlc-server started. PID: %NEW_PID%
 echo Dashboard: http://localhost:3003
+echo Graph scan: http://localhost:3003/scan.html
+echo Graph viewer: http://localhost:3003/graph-viewer.html
+echo MCP endpoint: http://localhost:3003/mcp
 echo Logs:
 echo   %APP_DIR%logs\server.log
 echo   %OUT_LOG%

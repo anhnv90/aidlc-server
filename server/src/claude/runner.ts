@@ -62,6 +62,20 @@ export async function runClaude(prompt: string, cwd: string): Promise<ClaudeResu
 }
 
 function fakeClaudeResponse(prompt: string) {
+  if (prompt.includes("AI-DLC Mattermost Question Intent Classifier")) {
+    const userMessage = extractPromptBlock(prompt, "The user mentioned @claude in Mattermost with this message:", "Task:");
+    if (/done|rule|process|playbook|definition|resiliency|aidlc/i.test(userMessage) && /screen|source|class|repository|endpoint|table|flow|JAM|CommandHandler/i.test(userMessage)) {
+      return JSON.stringify({ intent: "mixed", reason: "fake mixed rule and source graph question" });
+    }
+    if (/screen|source|class|repository|endpoint|table|flow|JAM|CommandHandler|JRQMT|Remand/i.test(userMessage)) {
+      return JSON.stringify({ intent: "source_graph", reason: "fake source graph question" });
+    }
+    if (/rule|process|playbook|definition|resiliency|aidlc/i.test(userMessage)) {
+      return JSON.stringify({ intent: "rule", reason: "fake rule question" });
+    }
+    return JSON.stringify({ intent: "general", reason: "fake general question" });
+  }
+
   if (prompt.includes("AI-DLC Rule Search Intent Classifier")) {
     const userMessage = extractPromptBlock(prompt, "The user mentioned @claude in Mattermost with this message:", "Task:");
     return JSON.stringify({
@@ -71,6 +85,28 @@ function fakeClaudeResponse(prompt: string) {
 
   if (prompt.includes("responding to a Mattermost mention")) {
     return "Fake general assistant response: this question was classified as outside AI-DLC rule search, so Claude answered it directly.";
+  }
+
+  if (prompt.includes("using the AIDLC business/source graph")) {
+    return [
+      "Status: partial",
+      "Summary: Fake mode routed this question to the source graph and found sample graph evidence.",
+      "Sources:",
+      "- graph.sqlite search_nodes",
+      "- graph.sqlite expand_node",
+      "Recommendation: disable CLAUDE_FAKE_MODE to answer from real graph evidence."
+    ].join("\n");
+  }
+
+  if (prompt.includes("Graph evidence from SQLite") && prompt.includes("AI-DLC rule repository knowledge")) {
+    return [
+      "Status: partial",
+      "Summary: Fake mode routed this as a mixed rule/source question.",
+      "Sources:",
+      "- aidlc-rules/",
+      "- graph.sqlite",
+      "Recommendation: disable CLAUDE_FAKE_MODE for real rule and graph evidence."
+    ].join("\n");
   }
 
   if (prompt.includes("Rule Search Agent") || prompt.includes("Claude Code running inside the AI-DLC repository")) {
