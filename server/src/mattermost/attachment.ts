@@ -34,10 +34,16 @@ function attachmentTitle(message: string) {
 
 function attachmentColor(message: string) {
   const firstLine = message.split(/\r?\n/, 1)[0]?.trim() ?? "";
-  if (/failed|not_found|not authorized|rejected/i.test(message)) return "#d92d20";
-  if (/created rule update pr/i.test(message) || /status:\s*exists/i.test(message)) return "#12b76a";
-  if (/status:\s*partial/i.test(message)) return "#f79009";
-  if (/status:\s*not_applicable/i.test(message)) return "#667085";
+  const statusLine = message
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => /^status:/i.test(line));
+
+  if (/failed|not authorized|rejected/i.test(firstLine)) return "#d92d20";
+  if (/^status:\s*not_found\b/i.test(statusLine ?? "")) return "#d92d20";
+  if (/^status:\s*(found|exists)\b/i.test(statusLine ?? "") || /created rule update pr/i.test(firstLine)) return "#12b76a";
+  if (/^status:\s*partial\b/i.test(statusLine ?? "")) return "#f79009";
+  if (/^status:\s*not_applicable\b/i.test(statusLine ?? "")) return "#667085";
   if (/^received .* queued as job #\d+/i.test(firstLine)) return "#2e90fa";
   return "#2e90fa";
 }
