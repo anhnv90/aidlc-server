@@ -1,28 +1,36 @@
 # aidlc-server
 
-Internal AI-DLC Mattermost bot server.
+Internal AI-DLC operations server.
+
+This service is the local admin/runtime hub for several AI-DLC workflows:
+
+- Browser dashboard for rule history, fake-message testing, and direct Mattermost posting.
+- Mattermost bot runtime for `@claude` questions and rule update commands.
+- AST/business graph scan UI, graph viewer, and MCP endpoint for source-code questions.
+- Sensitive source sanitizer for masking selected project folders before giving source code to AI agents.
 
 ## Features
 
-- Receives Mattermost bot mentions in realtime via WebSocket.
-- Replies to Mattermost through REST API.
-- Supports natural `@claude <question>` chat: Claude classifies the question, searches the AI-DLC repo for rule-related questions, and answers directly for non-rule questions.
+- Serves a browser-authenticated dashboard on port `3003`.
+- Stores rule update history in SQLite.
+- Serves the graph scan UI, graph viewer, graph APIs, and graph MCP endpoint from one HTTP process.
+- Serves a source sanitizer UI that uses built-in masking rules to create an AI-safe source copy.
+- Receives Mattermost bot mentions in realtime via WebSocket when real Mattermost mode is enabled.
+- Supports fake Mattermost mode for local testing before real admin credentials are ready.
+- Replies to Mattermost through REST API or the in-memory fake chat store.
+- Supports natural `@claude <question>` chat with intent classification: `rule`, `source_graph`, `mixed`, or `general`.
 - Supports rule add/update/delete through Claude Code CLI (`claude -p`).
 - Creates Git branches and GitHub PRs for rule updates.
-- Stores rule update history in SQLite.
-- Serves the AST/business graph MCP endpoint for Claude Desktop on the same HTTP server.
-- Serves the graph scan UI and graph viewer on the same HTTP server.
-- Serves a dashboard on port `3003` with rule history and direct Mattermost posting.
-- Includes fake Mattermost mode for local testing before real admin credentials are ready.
 
 ## Tech stack
 
 - Node.js + TypeScript
 - `ws` for Mattermost WebSocket
 - built-in `fetch` for REST APIs
-- `child_process` for `claude -p` and `git`
+- `child_process` for `claude -p`, `git`, Python graph scripts, and Docker/Joern commands
 - SQLite via `better-sqlite3`
-- Vue 3 + Vite for the read-only dashboard
+- Vue 3 + Vite for the dashboard
+- Static HTML graph/sanitizer tools served from `GRAPH_ROOT_PATH`
 
 ## Quick start
 
@@ -33,14 +41,29 @@ npm install
 npm run dev
 ```
 
-Open:
+For a production-style local run:
+
+```powershell
+npm run build
+.\start-server.bat
+```
+
+Stop the background server:
+
+```powershell
+.\stop-server.bat
+```
+
+Open the main surfaces:
 
 ```text
-http://localhost:3003
-http://localhost:3003/test-page
-http://localhost:3003/scan.html
-http://localhost:3003/graph-viewer.html
-http://localhost:3003/api/graph/health
+Dashboard:        http://localhost:3003
+Fake test chat:   http://localhost:3003/test-page
+Graph scan:       http://localhost:3003/scan.html
+Graph viewer:     http://localhost:3003/graph-viewer.html
+Source sanitizer: http://localhost:3003/sensitive-scan.html
+Graph health:     http://localhost:3003/api/graph/health
+MCP endpoint:     http://localhost:3003/mcp
 ```
 
 Logs are written to:
@@ -50,30 +73,46 @@ logs/server.log
 logs/error.log
 ```
 
-## Graph and MCP integration
+Process wrapper logs are written to:
 
-The Mattermost bot, graph scan UI, graph viewer, and MCP endpoint now run from the same `aidlc-server` process.
+```text
+logs/server-process.out.log
+logs/server-process.err.log
+```
 
-Default graph settings:
+## Web authentication
+
+The dashboard, graph UI pages, sanitizer page, and browser APIs use a simple server-side session cookie.
+
+Default login:
+
+```text
+admin / admin123
+```
+
+Relevant settings:
 
 ```text
 AUTH_USERNAME=admin
 AUTH_PASSWORD=admin123
 AUTH_SESSION_TTL_HOURS=12
+```
+
+The MCP endpoint remains available without this browser login so Claude Desktop can connect through `/mcp`.
+
+## Graph and MCP integration
+
+The graph scan UI, graph viewer, graph APIs, and MCP endpoint run from the same `aidlc-server` process. The static UI assets are served from `GRAPH_ROOT_PATH`, which defaults to the sibling `hr.ast-graph` project.
+
+Default graph settings:
+
+```text
 GRAPH_ROOT_PATH=D:\ukvn\src\ai.dlc\hr.ast-graph
 GRAPH_SQLITE_DB_PATH=D:\ukvn\src\ai.dlc\hr.ast-graph\business-graph\graph.sqlite
 GRAPH_PYTHON_EXE=C:\Users\anhnv\AppData\Local\Programs\Python\Python312\python.exe
 GRAPH_JOERN_IMAGE=ghcr.io/joernio/joern:nightly
 GRAPH_MCP_ENDPOINT=/mcp
 ```
-
-The web UI uses a simple server-side session cookie. The default login is:
-
-```text
-admin / admin123
-```
-
-The MCP endpoint remains available without this browser login so Claude Desktop can connect through `/mcp`.
 
 Claude Desktop in the same LAN can connect to:
 
@@ -100,7 +139,49 @@ Graph viewer:
 http://localhost:3003/graph-viewer.html
 ```
 
-## Fake Mattermost tests
+Sensitive source sanitizer:
+
+```text
+http://localhost:3003/sensitive-scan.html
+```
+
+## Sensitive source sanitizer
+
+The sanitizer page is intended for project admins who need to prepare source code for AI agents. It masks sensitive values directly in the selected project folders. It does not create a worktree and does not support unmasking, so run it only on a dedicated AI-safe branch or copy.
+
+### Masking strategy
+
+The sanitizer uses built-in masking logic instead of external Gitleaks or `redact` tools.
+
+It scans supported text files and masks only sensitive values/literals, not sensitive-looking identifiers. Examples that should stay unchanged include Java setters/getters and route constants such as `getPasswordPolicy: "ctx/sys/.../getPasswordPolicy/"`.
+
+Whole-file masking is applied to credential/license files:
+
+```text
+*.lic, *.license, *.pfx, *.p12, *.jks, *.keystore, *.pem, *.key, *.crt, *.cer
+```
+
+Value masking is applied to sensitive config/source values such as passwords, secrets, tokens, API keys, authorization headers, and connection strings:
+
+```text
+password, passwd, pwd, secret, token, accessToken, refreshToken, apiKey,
+clientSecret, privateKey, Authorization, Bearer, Basic, jdbc:, mongodb://,
+redis://, amqp://, postgres://, mysql://, sqlserver:, oracle:thin:
+```
+
+The replacement value is `__MASKED_SECRET__`.
+
+### Page workflow
+
+1. Open `/sensitive-scan.html` and log in.
+2. Add one or more project roots, then click `Discover`, or add project paths manually.
+3. Select the projects to process.
+4. Click `Scan` to preview findings without changing files.
+5. Click `Mask Source` to mask sensitive data directly in the selected project folders.
+
+The `Findings` table shows masked previews without exposing raw secret values. The `Changed Files` table shows files modified by `Mask Source`.
+
+## Dashboard and test chat
 
 With default `.env` values, the server runs in fake mode.
 
@@ -126,7 +207,14 @@ $body = @{
 Invoke-RestMethod -Method Post -Uri "http://localhost:3003/dev/fake-message" -ContentType "application/json" -Body $body
 ```
 
-## Commands
+The dashboard also exposes:
+
+- rule update history at `/`
+- fake chat testing at `/test-page`
+- direct Mattermost posting through `/api/mattermost/messages`
+- runtime flags through `/api/runtime-config`
+
+## Mattermost bot commands
 
 ### Ask Claude / search rules and source graph
 
@@ -198,6 +286,8 @@ rule_id: DOD-UI-01
 ```
 
 ## Real Mattermost mode
+
+Mattermost integration is optional. Keep `MATTERMOST_FAKE_MODE=true` for local dashboard/testing without a real Mattermost connection.
 
 Update `.env`:
 

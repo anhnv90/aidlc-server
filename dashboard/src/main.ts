@@ -439,6 +439,7 @@ const app = createApp({
             <button class="menu-link" :class="{ active: route === 'history' }" @click="navigate('history')">Mattermost chat history</button>
             <a class="menu-link" href="/scan.html">Graph Scan</a>
             <a class="menu-link" href="/graph-viewer.html">Graph Viewer</a>
+            <a class="menu-link" href="/sensitive-scan.html">Sensitive Scan</a>
           </nav>
         </div>
         <div class="topbar-user">

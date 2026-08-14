@@ -10,8 +10,10 @@ import { fakeChatStore } from "../mattermost/fakeChatStore";
 import { MattermostClient } from "../mattermost/client";
 import { GraphRoutes } from "../graph/graphRoutes";
 import { authStatus, isAuthenticated, login, logout, writeAuthCookie } from "../auth/session";
+import { SensitiveRoutes } from "../sensitive/sensitiveRoutes";
 
 const graphRoutes = new GraphRoutes();
+const sensitiveRoutes = new SensitiveRoutes();
 
 export function startHttpServer(
   history: RuleUpdateHistoryStore,
@@ -65,6 +67,10 @@ async function route(
       } else {
         sendJson(res, { error: "unauthorized" }, 401);
       }
+      return;
+    }
+
+    if (await sensitiveRoutes.handle(req, res, url)) {
       return;
     }
 

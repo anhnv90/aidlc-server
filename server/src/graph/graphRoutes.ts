@@ -210,6 +210,7 @@ export class GraphRoutes {
   private isGraphStaticPath(pathname: string) {
     return (
       pathname === "/scan.html" ||
+      pathname === "/sensitive-scan.html" ||
       pathname === "/graph-viewer.html" ||
       pathname === "/scan-config.json" ||
       pathname === "/scan-url.txt" ||
