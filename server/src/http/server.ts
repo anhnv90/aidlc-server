@@ -215,7 +215,13 @@ function isPublicAssetRequest(req: IncomingMessage, url: URL) {
 }
 
 function isDashboardShellRequest(req: IncomingMessage, url: URL) {
-  return req.method === "GET" && (url.pathname === "/" || url.pathname === "/test-page");
+  return (
+    req.method === "GET" &&
+    (url.pathname === "/" ||
+      url.pathname === "/run-launcher" ||
+      url.pathname === "/mattermost" ||
+      url.pathname === "/test-page")
+  );
 }
 
 function toFakeMessage(body: unknown): MattermostMessage {
