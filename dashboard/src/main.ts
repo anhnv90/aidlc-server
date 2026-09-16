@@ -763,7 +763,7 @@ const app = createApp({
                       </tr>
                       <tr>
                         <td><strong>RUN-2041</strong><span>Graph rebuild</span></td>
-                        <td><strong>hr.ast-graph</strong><span>scan/uk-root</span></td>
+                        <td><strong>graph-output</strong><span>scan/uk-root</span></td>
                         <td>Context</td>
                         <td><span class="status-badge graph">scanning</span></td>
                         <td><div class="progress"><span style="width:94%; background:var(--teal)"></span></div></td>

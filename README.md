@@ -30,7 +30,7 @@ This service is the local admin/runtime hub for several AI-DLC workflows:
 - `child_process` for `claude -p`, `git`, Python graph scripts, and Docker/Joern commands
 - SQLite via `better-sqlite3`
 - Vue 3 + Vite for the dashboard
-- Static HTML graph/sanitizer tools served from `GRAPH_ROOT_PATH`
+- Bundled static HTML graph/sanitizer tools under `graph/`
 
 ## Quick start
 
@@ -102,13 +102,13 @@ The MCP endpoint remains available without this browser login so Claude Desktop 
 
 ## Graph and MCP integration
 
-The graph scan UI, graph viewer, graph APIs, and MCP endpoint run from the same `aidlc-server` process. The static UI assets are served from `GRAPH_ROOT_PATH`, which defaults to the sibling `hr.ast-graph` project.
+The graph scan UI, graph viewer, graph APIs, and MCP endpoint run from the same `aidlc-server` process. The static UI assets and graph scripts are bundled under `graph/`. Scan outputs are written under `GRAPH_OUTPUT_ROOT_PATH`, and MCP/Claude graph queries read `GRAPH_SQLITE_DB_PATH`.
 
 Default graph settings:
 
 ```text
-GRAPH_ROOT_PATH=D:\ukvn\src\ai.dlc\hr.ast-graph
-GRAPH_SQLITE_DB_PATH=D:\ukvn\src\ai.dlc\hr.ast-graph\business-graph\graph.sqlite
+GRAPH_OUTPUT_ROOT_PATH=D:\ukvn\tmp
+GRAPH_SQLITE_DB_PATH=D:\ukvn\tmp\graph.sqlite
 GRAPH_PYTHON_EXE=C:\Users\anhnv\AppData\Local\Programs\Python\Python312\python.exe
 GRAPH_JOERN_IMAGE=ghcr.io/joernio/joern:nightly
 GRAPH_MCP_ENDPOINT=/mcp
@@ -120,12 +120,7 @@ Claude Desktop in the same LAN can connect to:
 http://<server-ip>:3003/mcp
 ```
 
-The old standalone graph servers are no longer required for the integrated flow:
-
-```text
-D:\ukvn\src\ai.dlc\hr.ast-graph\start-scan-server.bat
-D:\ukvn\src\ai.dlc\hr.ast-graph\mcp-server\start-http-mcp-server.bat
-```
+The old standalone graph servers are no longer required for the integrated flow, and the runtime graph UI/scripts are now bundled in `aidlc-server\graph`.
 
 Scan UI:
 

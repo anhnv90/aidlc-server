@@ -57,19 +57,13 @@ Example target paths:
 
 ```text
 /opt/aidlc/aidlc-server
-/opt/aidlc/hr.ast-graph
+/opt/aidlc/graph-output
 /opt/aidlc/aidlc-session
 ```
 
-`aidlc-server` is the Node.js server.
+`aidlc-server` is the Node.js server and includes the graph UI/scripts under `aidlc-server/graph`.
 
-`hr.ast-graph` contains:
-
-- `scan.html`
-- `graph-viewer.html`
-- `scripts/`
-- `business-graph/graph.sqlite`
-- `business-graph/*.ndjson`
+`graph-output` contains generated scan output such as `business-graph/*.ndjson`, CPG files, logs, and `graph.sqlite`.
 
 `aidlc-session` is the AI-DLC rules/source repository used by the Mattermost rule bot.
 
@@ -87,11 +81,10 @@ Option B, copy from Windows/server share:
 
 ```bash
 rsync -av /path/from/aidlc-server/ /opt/aidlc/aidlc-server/
-rsync -av /path/from/hr.ast-graph/ /opt/aidlc/hr.ast-graph/
 rsync -av /path/from/aidlc-session/ /opt/aidlc/aidlc-session/
 ```
 
-Do not skip `hr.ast-graph/business-graph/graph.sqlite`; MCP reads this file.
+Do not skip the configured graph SQLite file if you are restoring an existing graph; MCP reads this file.
 
 ## 4. Install dependencies and build
 
@@ -122,8 +115,8 @@ AUTH_USERNAME=admin
 AUTH_PASSWORD=admin123
 AUTH_SESSION_TTL_HOURS=12
 
-GRAPH_ROOT_PATH=/opt/aidlc/hr.ast-graph
-GRAPH_SQLITE_DB_PATH=/opt/aidlc/hr.ast-graph/business-graph/graph.sqlite
+GRAPH_OUTPUT_ROOT_PATH=/opt/aidlc/graph-output
+GRAPH_SQLITE_DB_PATH=/opt/aidlc/graph-output/graph.sqlite
 GRAPH_PYTHON_EXE=/usr/bin/python3
 GRAPH_JOERN_IMAGE=ghcr.io/joernio/joern:nightly
 GRAPH_MCP_ENDPOINT=/mcp
@@ -337,7 +330,7 @@ sudo systemctl status aidlc-server
 After graph data changes:
 
 ```bash
-rsync -av /path/from/hr.ast-graph/business-graph/ /opt/aidlc/hr.ast-graph/business-graph/
+rsync -av /path/from/graph-output/ /opt/aidlc/graph-output/
 sudo systemctl restart aidlc-server
 ```
 

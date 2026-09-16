@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
 dotenv.config();
 
@@ -46,6 +46,7 @@ export type AppConfig = {
   };
   graph: {
     rootPath: string;
+    outputRootPath: string;
     businessGraphDir: string;
     sqliteDbPath: string;
     pythonExe: string;
@@ -115,12 +116,19 @@ export const config: AppConfig = {
 };
 
 function buildGraphConfig() {
-  const rootPath = resolveFromCwd(getString("GRAPH_ROOT_PATH", "../hr.ast-graph"));
-  const businessGraphDir = resolve(rootPath, "business-graph");
+  const rootPath = resolveFromCwd("./graph");
+  const defaultOutputRootPath = resolveFromCwd("./data/graph-output");
+  const rawSqliteDbPath = getString("GRAPH_SQLITE_DB_PATH");
+  const outputRootPath = resolve(
+    getString("GRAPH_OUTPUT_ROOT_PATH", rawSqliteDbPath ? dirname(resolve(rawSqliteDbPath)) : defaultOutputRootPath)
+  );
+  const sqliteDbPath = resolve(rawSqliteDbPath || resolve(outputRootPath, "graph.sqlite"));
+  const businessGraphDir = resolve(outputRootPath, "business-graph");
   return {
     rootPath,
+    outputRootPath,
     businessGraphDir,
-    sqliteDbPath: resolve(getString("GRAPH_SQLITE_DB_PATH", resolve(businessGraphDir, "graph.sqlite"))),
+    sqliteDbPath,
     pythonExe: getString("GRAPH_PYTHON_EXE", "C:\\Users\\anhnv\\AppData\\Local\\Programs\\Python\\Python312\\python.exe"),
     joernImage: getString("GRAPH_JOERN_IMAGE", "ghcr.io/joernio/joern:nightly"),
     mcpEndpoint: normalizeEndpoint(getString("GRAPH_MCP_ENDPOINT", "/mcp"))
@@ -132,7 +140,7 @@ export function validateConfig() {
     throw new Error(`AIDLC_REPO_PATH does not exist: ${config.aidlcRepoPath}`);
   }
   if (!existsSync(config.graph.rootPath)) {
-    throw new Error(`GRAPH_ROOT_PATH does not exist: ${config.graph.rootPath}`);
+    throw new Error(`Bundled graph runtime path does not exist: ${config.graph.rootPath}`);
   }
   if (!config.mattermost.fakeMode) {
     if (!config.mattermost.baseUrl) throw new Error("MATTERMOST_BASE_URL is required in real mode");

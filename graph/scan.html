@@ -1,0 +1,1116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Graph Scan - AI-DLC Server Management</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --line: #d8dee8;
+      --text: #182230;
+      --muted: #647084;
+      --accent: #0969da;
+      --ok: #16833a;
+      --warn: #b45309;
+      --bad: #b42318;
+      --soft: #f8fafc;
+      --radius: 8px;
+      --shadow: 0 10px 24px rgba(28, 39, 54, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      color: var(--text);
+      background: var(--bg);
+      font: 14px/1.45 "Segoe UI", Arial, sans-serif;
+    }
+
+    button, input {
+      font: inherit;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 380px minmax(0, 1fr);
+      grid-template-rows: auto auto minmax(0, 1fr);
+      height: 100vh;
+    }
+
+    header {
+      grid-column: 1 / 3;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+      background: #14324d;
+      color: #ffffff;
+    }
+
+    .header-left {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .hamburger-button {
+      width: 38px;
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .hamburger-button .menu-icon {
+      color: #ffffff;
+      font-size: 22px;
+      font-weight: 800;
+      line-height: 1;
+      transform: translateY(-1px);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .app-nav {
+      position: absolute;
+      top: calc(100% + 10px);
+      left: 0;
+      z-index: 50;
+      width: 240px;
+      display: none;
+      gap: 6px;
+      padding: 8px;
+      border: 1px solid #d9e2ec;
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: 0 18px 50px rgba(20, 50, 77, 0.18);
+    }
+
+    .app-nav.open {
+      display: grid;
+    }
+
+    .app-nav a,
+    .app-nav button {
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      border: 0;
+      border-radius: 6px;
+      padding: 0 10px;
+      background: transparent;
+      color: #14324d;
+      text-decoration: none;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .app-nav a.active {
+      background: #eef6ff;
+      color: #0969da;
+    }
+
+    .app-nav a:hover,
+    .app-nav button:hover {
+      background: #f8fafc;
+      text-decoration: none;
+    }
+
+    .username {
+      color: #dbeafe;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    #logoutButton {
+      border-color: rgba(255, 255, 255, 0.24);
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .page-title {
+      grid-column: 1 / 3;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 18px 0;
+      background: var(--bg);
+    }
+
+    .page-title h2 {
+      margin: 0;
+      color: #14324d;
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .page-title .status-line {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: #526070;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--warn);
+    }
+
+    .dot.ready { background: var(--ok); }
+    .dot.bad { background: var(--bad); }
+
+    aside, main {
+      min-height: 0;
+      overflow: auto;
+      padding: 12px;
+    }
+
+    aside {
+      border-right: 1px solid var(--line);
+      background: #fbfcfe;
+    }
+
+    main {
+      background:
+        linear-gradient(#eef2f7 1px, transparent 1px),
+        linear-gradient(90deg, #eef2f7 1px, transparent 1px);
+      background-size: 24px 24px;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow: auto;
+    }
+
+    .section {
+      margin-bottom: 14px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .section h2 {
+      margin: 0 0 10px;
+      color: #304052;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .section-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .section-title-row h2 {
+      margin: 0;
+    }
+
+    .icon-button {
+      width: 30px;
+      min-height: 30px;
+      padding: 0;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      min-height: 34px;
+      padding: 7px 9px;
+      border: 1px solid #c6cfda;
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--text);
+    }
+
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+    }
+
+    button {
+      min-height: 34px;
+      padding: 7px 11px;
+      border: 1px solid #b6c1cf;
+      border-radius: 6px;
+      color: #172033;
+      background: #ffffff;
+      cursor: pointer;
+    }
+
+    button.primary {
+      border-color: var(--accent);
+      color: #ffffff;
+      background: var(--accent);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .root-list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .root-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .root-row input {
+      min-height: 30px;
+      padding: 5px 8px;
+      font-size: 12px;
+    }
+
+    .root-row button {
+      min-height: 30px;
+      padding: 5px 8px;
+      font-size: 12px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 30px;
+    }
+
+    .check-row label {
+      margin: 0;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .project-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(360px, 1fr));
+      gap: 4px 8px;
+    }
+
+    .project-area {
+      flex: 0 0 auto;
+      width: 100%;
+      min-width: 0;
+      overflow: visible;
+    }
+
+    .log-area {
+      flex: 1 1 auto;
+      width: 100%;
+      min-width: 0;
+      min-height: 320px;
+      display: flex;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .project {
+      display: grid;
+      grid-template-columns: auto 112px 64px minmax(130px, 1fr) auto;
+      gap: 6px;
+      align-items: center;
+      padding: 3px 5px;
+      border: 1px solid #dbe3ee;
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .project.missing {
+      background: #fffaf0;
+      border-color: #f2d29b;
+    }
+
+    .project .title {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 650;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 18px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: #eef2f7;
+      color: #334155;
+      font-size: 10px;
+      font-weight: 650;
+    }
+
+    .project .project-path {
+      min-height: 28px;
+      padding: 4px 6px;
+      font-size: 12px;
+    }
+
+    .project .browse-project {
+      min-height: 28px;
+      padding: 4px 7px;
+      font-size: 12px;
+    }
+
+    .badge.ok {
+      background: #e8f6ed;
+      color: #176239;
+    }
+
+    .badge.warn {
+      background: #fff4da;
+      color: #9a5b00;
+    }
+
+    .path-row {
+      display: contents;
+    }
+
+    .meta {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .stat {
+      padding: 10px;
+      border: 1px solid #dbe3ee;
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 20px;
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    pre {
+      flex: 1 1 auto;
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      margin: 0;
+      height: 100%;
+      min-height: 320px;
+      overflow: auto;
+      padding: 12px;
+      border: 0;
+      border-radius: 0;
+      background: #0b1220;
+      color: #dbeafe;
+      font: 12px/1.55 Consolas, "Courier New", monospace;
+      white-space: pre-wrap;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 22px;
+      background: rgba(15, 23, 42, 0.35);
+      z-index: 20;
+    }
+
+    .modal.open {
+      display: flex;
+    }
+
+    .dialog {
+      width: min(820px, 100%);
+      max-height: 84vh;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+    }
+
+    .dialog header {
+      grid-column: auto;
+      padding: 12px;
+    }
+
+    .dialog-body {
+      min-height: 0;
+      overflow: auto;
+      padding: 12px;
+    }
+
+    .folder {
+      padding: 8px;
+      border-bottom: 1px solid #edf1f6;
+      cursor: pointer;
+    }
+
+    .folder:hover {
+      background: #f1f5f9;
+    }
+
+    .dialog-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    @media (max-width: 980px) {
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto minmax(0, 1fr);
+      }
+      header { grid-column: 1; }
+      .page-title { grid-column: 1; }
+      aside { border-right: 0; border-bottom: 1px solid var(--line); }
+      .project-list { grid-template-columns: 1fr; }
+      .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="header-left">
+        <button id="menuButton" class="hamburger-button" type="button" aria-label="Open navigation menu" aria-expanded="false">
+          <span class="menu-icon" aria-hidden="true">&#9776;</span>
+        </button>
+        <h1>AI-DLC Server Management</h1>
+        <nav id="appNav" class="app-nav">
+          <a href="/">Mattermost chat history</a>
+          <a class="active" href="/scan.html">Graph Scan</a>
+          <a href="/graph-viewer.html">Graph Viewer</a>
+          <a href="/sensitive-scan.html">Sensitive Scan</a>
+        </nav>
+      </div>
+      <div class="header-actions">
+        <span id="authUser" class="username">admin</span>
+        <button id="logoutButton" type="button">Logout</button>
+      </div>
+    </header>
+
+    <section class="page-title">
+      <h2>Graph Scan</h2>
+      <div class="status-line">
+        <span id="apiDot" class="dot"></span>
+        <span id="apiText">API</span>
+      </div>
+    </section>
+
+    <aside>
+      <section class="section">
+        <div class="section-title-row">
+          <h2>Project Root</h2>
+          <button id="addProjectRoot" class="icon-button" title="Add project root" aria-label="Add project root">+</button>
+        </div>
+        <div id="projectRoots" class="root-list"></div>
+      </section>
+
+      <section class="section">
+        <h2>Scan Options</h2>
+        <div class="check-row">
+          <input id="buildBusinessGraph" type="checkbox" checked>
+          <label for="buildBusinessGraph">Business graph</label>
+        </div>
+        <div class="check-row">
+          <input id="importSqlite" type="checkbox" checked>
+          <label for="importSqlite">SQLite import</label>
+        </div>
+        <div class="check-row">
+          <input id="scanJoern" type="checkbox" checked>
+          <label for="scanJoern">Joern CPG</label>
+        </div>
+        <div class="check-row">
+          <input id="verifyCpg" type="checkbox" checked>
+          <label for="verifyCpg">Verify CPG</label>
+        </div>
+        <div class="check-row">
+          <input id="pullJoernImage" type="checkbox" checked>
+          <label for="pullJoernImage">Pull Joern image</label>
+        </div>
+        <div style="height:8px"></div>
+        <label for="pythonExe">Python</label>
+        <input id="pythonExe" type="text">
+        <div style="height:8px"></div>
+        <label for="joernImage">Joern image</label>
+        <input id="joernImage" type="text">
+      </section>
+    </aside>
+
+    <main>
+      <div class="toolbar">
+        <div>
+          <button id="startScan" class="primary">Start Scan</button>
+          <button id="reloadProjects">Reload Projects</button>
+          <button id="copyLog" title="Copy log">Copy Log</button>
+        </div>
+        <div class="meta" id="graphRoot"></div>
+      </div>
+
+      <div class="summary">
+        <div class="stat"><strong id="selectedCount">0</strong><span>selected</span></div>
+        <div class="stat"><strong id="availableCount">0</strong><span>available</span></div>
+        <div class="stat"><strong id="missingCount">0</strong><span>missing</span></div>
+        <div class="stat"><strong id="jobStatus">idle</strong><span>job</span></div>
+      </div>
+
+      <section class="section project-area">
+        <h2>Projects</h2>
+        <div id="projects" class="project-list"></div>
+      </section>
+
+      <section class="log-area">
+        <pre id="log">Ready.</pre>
+      </section>
+    </main>
+  </div>
+
+  <div id="browseModal" class="modal">
+    <div class="dialog">
+      <header>
+        <h1>Select Folder</h1>
+        <button id="closeBrowse">Close</button>
+      </header>
+      <div style="padding:12px;border-bottom:1px solid var(--line)">
+        <div class="row">
+          <input id="browsePath" type="text">
+          <button id="goBrowse">Go</button>
+        </div>
+      </div>
+      <div id="folderList" class="dialog-body"></div>
+      <div class="dialog-footer">
+        <button id="useFolder" class="primary">Use Folder</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+
+    const apiBase = new URLSearchParams(location.search).get("apiBase") || "";
+    const menuButton = document.getElementById("menuButton");
+    const appNav = document.getElementById("appNav");
+    menuButton?.addEventListener("click", event => {
+      event.stopPropagation();
+      const isOpen = appNav?.classList.toggle("open");
+      menuButton.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    });
+    document.addEventListener("click", event => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target?.closest(".header-left")) {
+        appNav?.classList.remove("open");
+        menuButton?.setAttribute("aria-expanded", "false");
+      }
+    });
+    fetch("/api/auth/status")
+      .then(response => response.ok ? response.json() : null)
+      .then(data => {
+        if (data?.username) {
+          document.getElementById("authUser").textContent = data.username;
+        }
+      })
+      .catch(() => {});
+    document.getElementById("logoutButton")?.addEventListener("click", async () => {
+      await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+      location.href = "/";
+    });
+    const defaultProjectRoot = "D:\\src.uk\\UniversalK\\nts.uk";
+    const state = {
+      projectRoots: [],
+      projects: [],
+      activePathInput: null,
+      browseCurrentPath: "",
+      jobId: null,
+      pollTimer: null,
+      saveTimer: null
+    };
+
+    const el = {
+      apiText: document.getElementById("apiText"),
+      apiDot: document.getElementById("apiDot"),
+      projectRoots: document.getElementById("projectRoots"),
+      pythonExe: document.getElementById("pythonExe"),
+      joernImage: document.getElementById("joernImage"),
+      buildBusinessGraph: document.getElementById("buildBusinessGraph"),
+      importSqlite: document.getElementById("importSqlite"),
+      scanJoern: document.getElementById("scanJoern"),
+      verifyCpg: document.getElementById("verifyCpg"),
+      pullJoernImage: document.getElementById("pullJoernImage"),
+      projects: document.getElementById("projects"),
+      selectedCount: document.getElementById("selectedCount"),
+      availableCount: document.getElementById("availableCount"),
+      missingCount: document.getElementById("missingCount"),
+      jobStatus: document.getElementById("jobStatus"),
+      graphRoot: document.getElementById("graphRoot"),
+      log: document.getElementById("log"),
+      browseModal: document.getElementById("browseModal"),
+      browsePath: document.getElementById("browsePath"),
+      folderList: document.getElementById("folderList")
+    };
+
+    async function api(path, options = {}) {
+      const response = await fetch(`${apiBase}${path}`, {
+        headers: { "Content-Type": "application/json" },
+        ...options
+      });
+      if (!response.ok) {
+        let message = `${response.status} ${response.statusText}`;
+        try {
+          const body = await response.json();
+          message = body.error || message;
+        } catch {}
+        throw new Error(message);
+      }
+      return response.json();
+    }
+
+    function setApiState(ok, text) {
+      el.apiDot.className = ok ? "dot ready" : "dot bad";
+      el.apiText.textContent = text;
+    }
+
+    async function loadProjects() {
+      try {
+        applyProjectPayload(await api("/api/projects"), true);
+      } catch (error) {
+        setApiState(false, "API offline");
+        el.log.textContent = `Cannot reach scan API at ${apiBase || "(same origin)"}.\n${error.message}`;
+      }
+    }
+
+    async function saveAndReloadProjects() {
+      try {
+        applyProjectPayload(await api("/api/config", {
+          method: "POST",
+          body: JSON.stringify(currentConfig())
+        }), true);
+      } catch (error) {
+        setApiState(false, "Save failed");
+        el.log.textContent = error.message;
+      }
+    }
+
+    async function saveConfigOnly() {
+      try {
+        await api("/api/config", {
+          method: "POST",
+          body: JSON.stringify(currentConfig())
+        });
+        setApiState(true, "API ready");
+      } catch (error) {
+        setApiState(false, "Save failed");
+      }
+    }
+
+    function scheduleSaveConfigOnly() {
+      clearTimeout(state.saveTimer);
+      state.saveTimer = setTimeout(saveConfigOnly, 350);
+    }
+
+    function applyProjectPayload(data, applyConfig) {
+      setApiState(true, "API ready");
+      el.graphRoot.textContent = data.graphRoot || "";
+      if (applyConfig) {
+        const config = data.config || data.defaults || {};
+        const options = config.scanOptions || {};
+        state.projectRoots = normalizeProjectRoots(config.projectRoots || [defaultProjectRoot]);
+        el.buildBusinessGraph.checked = options.buildBusinessGraph !== false;
+        el.importSqlite.checked = options.importSqlite !== false;
+        el.scanJoern.checked = options.scanJoern !== false;
+        el.verifyCpg.checked = options.verifyCpg !== false;
+        el.pullJoernImage.checked = options.pullJoernImage !== false;
+        el.pythonExe.value = config.pythonExe || "";
+        el.joernImage.value = config.joernImage || "";
+        updateVerifyAvailability();
+        renderProjectRoots();
+      }
+      state.projects = data.projects || [];
+      renderProjects();
+    }
+
+    function normalizeProjectRoots(roots) {
+      const values = (roots || [])
+        .map(root => typeof root === "string" ? root : root.path)
+        .map(path => String(path || "").trim())
+        .filter(Boolean);
+      return (values.length ? values : [defaultProjectRoot]).map(path => ({ path }));
+    }
+
+    function renderProjectRoots() {
+      el.projectRoots.innerHTML = "";
+      if (!state.projectRoots.length) {
+        state.projectRoots = [{ path: defaultProjectRoot }];
+      }
+      state.projectRoots.forEach((root, index) => {
+        const row = document.createElement("div");
+        row.className = "root-row";
+        row.dataset.index = index;
+        row.innerHTML = `
+          <input class="root-path" type="text" value="${escapeAttr(root.path)}" placeholder="Project root path">
+          <button class="browse-root">Browse</button>
+        `;
+        const input = row.querySelector(".root-path");
+        input.addEventListener("change", () => {
+          state.projectRoots[index].path = input.value.trim();
+          saveAndReloadProjects();
+        });
+        input.addEventListener("keydown", event => {
+          if (event.key === "Enter") input.blur();
+        });
+        row.querySelector(".browse-root").addEventListener("click", () => openBrowse(input));
+        el.projectRoots.appendChild(row);
+      });
+    }
+
+    function addProjectRoot() {
+      syncProjectRootsFromDom();
+      state.projectRoots.push({ path: "" });
+      renderProjectRoots();
+      const inputs = el.projectRoots.querySelectorAll(".root-path");
+      const last = inputs[inputs.length - 1];
+      if (last) last.focus();
+    }
+
+    function syncProjectRootsFromDom() {
+      state.projectRoots = Array.from(el.projectRoots.querySelectorAll(".root-path"))
+        .map(input => ({ path: input.value.trim() }));
+    }
+
+    function scanOptionsFromUi() {
+      return {
+        buildBusinessGraph: el.buildBusinessGraph.checked,
+        importSqlite: el.importSqlite.checked,
+        scanJoern: el.scanJoern.checked,
+        verifyCpg: el.verifyCpg.checked,
+        pullJoernImage: el.pullJoernImage.checked
+      };
+    }
+
+    function currentConfig() {
+      syncProjectRootsFromDom();
+      syncPathsFromDom();
+      return {
+        projectRoots: state.projectRoots.map(root => root.path).filter(Boolean),
+        selectedProjects: state.projects.filter(project => project.selected).map(project => project.path || project.name),
+        scanOptions: scanOptionsFromUi(),
+        pythonExe: el.pythonExe.value.trim(),
+        joernImage: el.joernImage.value.trim()
+      };
+    }
+
+    function projectRow(project, index) {
+      const row = document.createElement("div");
+      row.className = `project ${project.exists ? "" : "missing"}`;
+      row.dataset.index = index;
+      row.innerHTML = `
+        <input class="project-check" type="checkbox" ${project.selected ? "checked" : ""}>
+        <div class="title" title="${escapeAttr(project.name)}">
+          <span>${escapeHtml(project.label || project.name)}</span>
+        </div>
+        <span class="badge ${project.exists ? "ok" : "warn"}">${project.exists ? "available" : "missing"}</span>
+        <input class="project-path" type="text" value="${escapeAttr(project.path)}">
+        <button class="browse-project">Browse</button>
+      `;
+      row.querySelector(".project-check").addEventListener("change", event => {
+        project.selected = event.target.checked;
+        updateCounts();
+        scheduleSaveConfigOnly();
+      });
+      row.querySelector(".project-path").addEventListener("change", event => {
+        project.path = event.target.value.trim();
+        project.exists = false;
+        project.missing = true;
+        scheduleSaveConfigOnly();
+        renderProjects();
+      });
+      row.querySelector(".browse-project").addEventListener("click", () => openBrowse(row.querySelector(".project-path")));
+      return row;
+    }
+
+    function renderProjects() {
+      el.projects.innerHTML = "";
+      state.projects.forEach((project, index) => el.projects.appendChild(projectRow(project, index)));
+      updateCounts();
+    }
+
+    function allProjects() {
+      syncPathsFromDom();
+      return state.projects;
+    }
+
+    function syncPathsFromDom() {
+      document.querySelectorAll(".project").forEach(row => {
+        const project = state.projects[Number(row.dataset.index)];
+        if (!project) return;
+        project.selected = row.querySelector(".project-check").checked;
+        project.path = row.querySelector(".project-path").value.trim();
+      });
+    }
+
+    function updateCounts() {
+      syncPathsFromDom();
+      el.selectedCount.textContent = state.projects.filter(p => p.selected).length;
+      el.availableCount.textContent = state.projects.filter(p => p.exists).length;
+      el.missingCount.textContent = state.projects.filter(p => !p.exists).length;
+    }
+
+    async function startScan() {
+      updateCounts();
+      const projects = allProjects();
+      const selected = projects.filter(p => p.selected);
+      if (!selected.length) {
+        el.log.textContent = "No project selected.";
+        return;
+      }
+      document.getElementById("startScan").disabled = true;
+      el.log.textContent = "Starting scan...";
+      const config = currentConfig();
+      const payload = {
+        projects,
+        projectRoots: config.projectRoots,
+        selectedProjects: config.selectedProjects,
+        buildBusinessGraph: config.scanOptions.buildBusinessGraph,
+        importSqlite: config.scanOptions.importSqlite,
+        scanJoern: config.scanOptions.scanJoern,
+        verifyCpg: config.scanOptions.verifyCpg,
+        pullJoernImage: config.scanOptions.pullJoernImage,
+        pythonExe: config.pythonExe,
+        joernImage: config.joernImage
+      };
+      try {
+        const result = await api("/api/scan", { method: "POST", body: JSON.stringify(payload) });
+        state.jobId = result.jobId;
+        pollJob();
+        state.pollTimer = setInterval(pollJob, 1800);
+      } catch (error) {
+        document.getElementById("startScan").disabled = false;
+        el.log.textContent = error.message;
+      }
+    }
+
+    async function pollJob() {
+      if (!state.jobId) return;
+      try {
+        const job = await api(`/api/jobs/${state.jobId}`);
+        el.jobStatus.textContent = job.status;
+        el.log.textContent = (job.lines || []).join("\n") || job.status;
+        el.log.scrollTop = el.log.scrollHeight;
+        if (job.status === "completed" || job.status === "failed") {
+          clearInterval(state.pollTimer);
+          document.getElementById("startScan").disabled = false;
+          if (job.error) el.log.textContent += `\n${job.error}`;
+        }
+      } catch (error) {
+        el.log.textContent += `\n${error.message}`;
+      }
+    }
+
+    async function openBrowse(input) {
+      state.activePathInput = input;
+      state.browseCurrentPath = input.value || "";
+      el.browseModal.classList.add("open");
+      await loadBrowse(state.browseCurrentPath);
+    }
+
+    async function loadBrowse(path) {
+      const data = await api(`/api/browse?path=${encodeURIComponent(path || "")}`);
+      state.browseCurrentPath = data.path || "";
+      el.browsePath.value = state.browseCurrentPath;
+      el.folderList.innerHTML = "";
+      if (data.parent) {
+        const up = document.createElement("div");
+        up.className = "folder";
+        up.textContent = "..";
+        up.addEventListener("click", () => loadBrowse(data.parent));
+        el.folderList.appendChild(up);
+      }
+      (data.entries || []).forEach(entry => {
+        const item = document.createElement("div");
+        item.className = "folder";
+        item.textContent = entry.name;
+        item.addEventListener("dblclick", () => loadBrowse(entry.path));
+        item.addEventListener("click", () => {
+          state.browseCurrentPath = entry.path;
+          el.browsePath.value = entry.path;
+        });
+        el.folderList.appendChild(item);
+      });
+    }
+
+    function useFolder() {
+      if (state.activePathInput) {
+        state.activePathInput.value = state.browseCurrentPath;
+        state.activePathInput.dispatchEvent(new Event("change"));
+      }
+      el.browseModal.classList.remove("open");
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/'/g, "&#39;");
+    }
+
+    function updateVerifyAvailability() {
+      el.verifyCpg.disabled = !el.scanJoern.checked;
+      if (!el.scanJoern.checked) el.verifyCpg.checked = false;
+    }
+
+    document.getElementById("addProjectRoot").addEventListener("click", addProjectRoot);
+    document.getElementById("reloadProjects").addEventListener("click", saveAndReloadProjects);
+    document.getElementById("startScan").addEventListener("click", startScan);
+    document.getElementById("copyLog").addEventListener("click", copyLog);
+    document.getElementById("closeBrowse").addEventListener("click", () => el.browseModal.classList.remove("open"));
+    document.getElementById("goBrowse").addEventListener("click", () => loadBrowse(el.browsePath.value));
+    document.getElementById("useFolder").addEventListener("click", useFolder);
+    el.scanJoern.addEventListener("change", () => {
+      updateVerifyAvailability();
+      scheduleSaveConfigOnly();
+    });
+    [el.buildBusinessGraph, el.importSqlite, el.verifyCpg, el.pullJoernImage].forEach(input => {
+      input.addEventListener("change", scheduleSaveConfigOnly);
+    });
+    [el.pythonExe, el.joernImage].forEach(input => {
+      input.addEventListener("change", scheduleSaveConfigOnly);
+    });
+
+    async function copyLog() {
+      const button = document.getElementById("copyLog");
+      const text = el.log.textContent || "";
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const area = document.createElement("textarea");
+          area.value = text;
+          area.style.position = "fixed";
+          area.style.left = "-9999px";
+          document.body.appendChild(area);
+          area.focus();
+          area.select();
+          document.execCommand("copy");
+          area.remove();
+        }
+        const old = button.textContent;
+        button.textContent = "Copied";
+        setTimeout(() => button.textContent = old, 1400);
+      } catch (error) {
+        const old = button.textContent;
+        button.textContent = "Copy failed";
+        setTimeout(() => button.textContent = old, 1800);
+      }
+    }
+
+    loadProjects();
+  </script>
+</body>
+</html>

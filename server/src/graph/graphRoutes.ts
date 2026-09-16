@@ -202,6 +202,8 @@ export class GraphRoutes {
       endpoint: config.graph.mcpEndpoint,
       transport: "streamable-http",
       graphRoot: config.graph.rootPath,
+      outputRoot: config.graph.outputRootPath,
+      businessGraphDir: config.graph.businessGraphDir,
       db: config.graph.sqliteDbPath,
       dbExists: existsSync(config.graph.sqliteDbPath)
     };
@@ -222,11 +224,31 @@ export class GraphRoutes {
 
   private serveGraphStatic(pathname: string, res: ServerResponse) {
     const requestPath = pathname.startsWith("/graph/") ? pathname.slice("/graph".length) || "/scan.html" : pathname;
-    const safePath = normalize(requestPath).replace(/^(\.\.[/\\])+/, "");
-    const filePath = resolve(join(config.graph.rootPath, safePath));
-    const graphRoot = resolve(config.graph.rootPath);
+    const target = this.graphStaticTarget(requestPath);
+    this.serveStaticFrom(target.basePath, target.requestPath, res);
+  }
 
-    if (filePath !== graphRoot && !filePath.startsWith(`${graphRoot}\\`) && !filePath.startsWith(`${graphRoot}/`)) {
+  private graphStaticTarget(requestPath: string) {
+    if (requestPath === "/scan-config.json") {
+      return { basePath: config.graph.outputRootPath, requestPath };
+    }
+
+    if (requestPath.startsWith("/business-graph/")) {
+      return {
+        basePath: config.graph.businessGraphDir,
+        requestPath: requestPath.slice("/business-graph".length)
+      };
+    }
+
+    return { basePath: config.graph.rootPath, requestPath };
+  }
+
+  private serveStaticFrom(basePath: string, requestPath: string, res: ServerResponse) {
+    const safePath = normalize(requestPath).replace(/^(\.\.[/\\])+/, "");
+    const filePath = resolve(join(basePath, safePath));
+    const root = resolve(basePath);
+
+    if (filePath !== root && !filePath.startsWith(`${root}\\`) && !filePath.startsWith(`${root}/`)) {
       sendJson(res, { error: "forbidden" }, 403);
       return;
     }

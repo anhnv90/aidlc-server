@@ -1,0 +1,1384 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Graph Viewer - AI-DLC Server Management</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --line: #d8dee8;
+      --text: #1b2430;
+      --muted: #647084;
+      --accent: #0969da;
+      --accent-2: #0f766e;
+      --warn: #b45309;
+      --bad: #b42318;
+      --shadow: 0 10px 24px rgba(28, 39, 54, 0.08);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+      font: 14px/1.45 "Segoe UI", Arial, sans-serif;
+    }
+
+    body {
+      overflow: hidden;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr) 360px;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      height: 100vh;
+    }
+
+    header {
+      grid-column: 1 / 4;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+      background: #14324d;
+      color: #ffffff;
+    }
+
+    .header-left {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .hamburger-button {
+      width: 38px;
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .hamburger-button .menu-icon {
+      color: #ffffff;
+      font-size: 22px;
+      font-weight: 800;
+      line-height: 1;
+      transform: translateY(-1px);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .app-nav {
+      position: absolute;
+      top: calc(100% + 10px);
+      left: 0;
+      z-index: 50;
+      width: 240px;
+      display: none;
+      gap: 6px;
+      padding: 8px;
+      border: 1px solid #d9e2ec;
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: 0 18px 50px rgba(20, 50, 77, 0.18);
+    }
+
+    .app-nav.open {
+      display: grid;
+    }
+
+    .app-nav a,
+    .app-nav button {
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      border: 0;
+      border-radius: 6px;
+      padding: 0 10px;
+      background: transparent;
+      color: #14324d;
+      text-decoration: none;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .app-nav a.active {
+      background: #eef6ff;
+      color: #0969da;
+    }
+
+    .app-nav a:hover,
+    .app-nav button:hover {
+      background: #f8fafc;
+      text-decoration: none;
+    }
+
+    .username {
+      color: #dbeafe;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    #logoutButton {
+      border-color: rgba(255, 255, 255, 0.24);
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .page-title {
+      grid-column: 1 / 4;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 18px 0;
+      background: var(--bg);
+    }
+
+    .page-title h2 {
+      margin: 0;
+      color: #14324d;
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .page-title .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: #526070;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--warn);
+      display: inline-block;
+    }
+
+    .dot.ready {
+      background: #16833a;
+    }
+
+    .sidebar,
+    .details {
+      min-height: 0;
+      overflow: auto;
+      padding: 14px;
+      background: #fbfcfe;
+    }
+
+    .sidebar {
+      border-right: 1px solid var(--line);
+    }
+
+    .details {
+      border-left: 1px solid var(--line);
+    }
+
+    .viewer {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      cursor: grab;
+      background:
+        linear-gradient(#eef2f7 1px, transparent 1px),
+        linear-gradient(90deg, #eef2f7 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    .viewer.panning {
+      cursor: grabbing;
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .section {
+      margin-bottom: 14px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .section h2 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #304052;
+      letter-spacing: 0;
+    }
+
+    .field {
+      margin: 9px 0;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      min-height: 34px;
+      padding: 7px 9px;
+      border: 1px solid #c6cfda;
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--text);
+    }
+
+    input[type="file"] {
+      width: 100%;
+      font-size: 12px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    button {
+      min-height: 34px;
+      padding: 7px 11px;
+      border: 1px solid #b6c1cf;
+      border-radius: 6px;
+      color: #172033;
+      background: #ffffff;
+      cursor: pointer;
+    }
+
+    button.primary {
+      border-color: var(--accent);
+      color: #ffffff;
+      background: var(--accent);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .chip {
+      min-height: 28px;
+      padding: 5px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 999px;
+      color: #243247;
+      background: #f8fafc;
+      font-size: 12px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      padding: 9px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      background: #f8fafc;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 18px;
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .result-list {
+      max-height: 220px;
+      overflow: auto;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .result {
+      padding: 8px;
+      border-bottom: 1px solid #edf1f6;
+      cursor: pointer;
+    }
+
+    .result:last-child {
+      border-bottom: 0;
+    }
+
+    .result:hover {
+      background: #eef6ff;
+    }
+
+    .result .title {
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+
+    .result .meta {
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .legend {
+      display: grid;
+      gap: 6px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #304052;
+      font-size: 12px;
+    }
+
+    .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 0, 0, 0.15);
+    }
+
+    .details pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      margin: 0;
+      padding: 10px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      background: #f8fafc;
+      font-size: 12px;
+    }
+
+    .details .headline {
+      font-size: 16px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .details .sub {
+      margin: 4px 0 10px;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 12px;
+      border: 1px dashed #cbd5e1;
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .toolbar {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      display: flex;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: var(--shadow);
+    }
+
+    .graph-label {
+      pointer-events: none;
+      font-size: 11px;
+      fill: #1f2937;
+      paint-order: stroke;
+      stroke: #ffffff;
+      stroke-width: 3px;
+      stroke-linejoin: round;
+    }
+
+    .edge {
+      stroke: #94a3b8;
+      stroke-width: 1.4;
+      opacity: 0.72;
+    }
+
+    .edge.highlight {
+      stroke: var(--accent);
+      stroke-width: 2.4;
+      opacity: 1;
+    }
+
+    .node circle,
+    .node rect {
+      stroke: #243247;
+      stroke-width: 1.2;
+      cursor: pointer;
+    }
+
+    .node.focused circle,
+    .node.focused rect {
+      stroke: #b42318;
+      stroke-width: 3;
+    }
+
+    .node:hover circle,
+    .node:hover rect {
+      stroke: #000000;
+      stroke-width: 2.2;
+    }
+
+    .toast {
+      position: absolute;
+      right: 14px;
+      bottom: 14px;
+      max-width: 520px;
+      padding: 10px 12px;
+      border: 1px solid #f4c27a;
+      border-radius: 8px;
+      background: #fff7ed;
+      color: #6b3b05;
+      box-shadow: var(--shadow);
+      display: none;
+    }
+
+    @media (max-width: 1100px) {
+      .app {
+        grid-template-columns: 320px minmax(0, 1fr);
+      }
+
+      .details {
+        display: none;
+      }
+
+      header {
+        grid-column: 1 / 3;
+      }
+
+      .page-title {
+        grid-column: 1 / 3;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="header-left">
+        <button id="menuButton" class="hamburger-button" type="button" aria-label="Open navigation menu" aria-expanded="false">
+          <span class="menu-icon" aria-hidden="true">&#9776;</span>
+        </button>
+        <h1>AI-DLC Server Management</h1>
+        <nav id="appNav" class="app-nav">
+          <a href="/">Mattermost chat history</a>
+          <a href="/scan.html">Graph Scan</a>
+          <a class="active" href="/graph-viewer.html">Graph Viewer</a>
+          <a href="/sensitive-scan.html">Sensitive Scan</a>
+        </nav>
+      </div>
+      <div class="header-actions">
+        <span id="authUser" class="username">admin</span>
+        <button id="logoutButton" type="button">Logout</button>
+      </div>
+    </header>
+
+    <section class="page-title">
+      <h2>Graph Viewer</h2>
+        <div class="status">
+          <span id="statusDot" class="dot"></span>
+          <span id="statusText">Loading graph...</span>
+        </div>
+    </section>
+
+    <aside class="sidebar">
+      <section class="section">
+        <h2>Load Graph</h2>
+        <div class="field">
+          <label>Nodes NDJSON</label>
+          <input id="nodesFile" type="file" accept=".ndjson,.json,.txt">
+        </div>
+        <div class="field">
+          <label>Edges NDJSON</label>
+          <input id="edgesFile" type="file" accept=".ndjson,.json,.txt">
+        </div>
+        <div class="actions">
+          <button id="loadFiles">Load Selected Files</button>
+          <button id="reloadDefault">Reload Default</button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Explore</h2>
+        <div class="field">
+          <label>Kind</label>
+          <select id="kind">
+            <option value="Screen">Screen</option>
+            <option value="Endpoint">Endpoint</option>
+            <option value="EndpointGap">Endpoint Gap</option>
+            <option value="JavaType">Java Type</option>
+            <option value="UIControl">UI Control</option>
+            <option value="Table">Table</option>
+            <option value="Any">Any</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Search</label>
+          <input id="query" type="text" value="jam/001/b" placeholder="jam/001/b, remand, ntsGridList, JRQMT...">
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Depth</label>
+            <input id="depth" type="number" min="1" max="8" value="1">
+          </div>
+          <div class="field">
+            <label>Direction</label>
+            <select id="direction">
+              <option value="both">Both</option>
+              <option value="out">Outgoing</option>
+              <option value="in">Incoming</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Max Nodes</label>
+            <input id="maxNodes" type="number" min="20" max="800" value="220">
+          </div>
+          <div class="field">
+            <label>Edge Labels</label>
+            <select id="edgeLabels">
+              <option value="off">Off</option>
+              <option value="on">On</option>
+            </select>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="search" class="primary">Search</button>
+          <button id="fit">Fit</button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Samples</h2>
+        <div class="chips">
+          <button class="chip" data-kind="Screen" data-query="jam/001/b" data-depth="1">JAM001-B</button>
+          <button class="chip" data-kind="Screen" data-query="jam/001/c" data-depth="1">JAM001-C</button>
+          <button class="chip" data-kind="Screen" data-query="jam/001/d" data-depth="1">JAM001-D</button>
+          <button class="chip" data-kind="Endpoint" data-query="hr/application/data/remand" data-depth="1">Remand endpoint</button>
+          <button class="chip" data-kind="JavaType" data-query="RemandCommandHandler" data-depth="1">Remand handler</button>
+          <button class="chip" data-kind="Table" data-query="JRQMT_APP_SETTING" data-depth="1">App setting table</button>
+          <button class="chip" data-kind="UIControl" data-query="ntsGridList" data-depth="1">Grid controls</button>
+          <button class="chip" data-kind="EndpointGap" data-query="missing-java-source" data-depth="1">Endpoint gaps</button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Graph Stats</h2>
+        <div class="stats">
+          <div class="stat"><strong id="nodeCount">0</strong><span>nodes</span></div>
+          <div class="stat"><strong id="edgeCount">0</strong><span>edges</span></div>
+          <div class="stat"><strong id="viewNodeCount">0</strong><span>visible nodes</span></div>
+          <div class="stat"><strong id="viewEdgeCount">0</strong><span>visible edges</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Search Results</h2>
+        <div id="results" class="result-list">
+          <div class="empty">Load the graph, then search for a screen, endpoint, control, type, or table.</div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Legend</h2>
+        <div class="legend" id="legend"></div>
+      </section>
+    </aside>
+
+    <main class="viewer">
+      <div class="toolbar">
+        <button id="zoomIn">+</button>
+        <button id="zoomOut">-</button>
+        <button id="resetView">Reset</button>
+      </div>
+      <svg id="graphSvg" role="img" aria-label="Business graph visualization"></svg>
+      <div id="toast" class="toast"></div>
+    </main>
+
+    <aside class="details">
+      <section class="section">
+        <h2>Selection</h2>
+        <div id="selection">
+          <div class="empty">Select a node to inspect properties and adjacent edges.</div>
+        </div>
+      </section>
+      <section class="section">
+        <h2>Visible Edge Types</h2>
+        <div id="edgeTypeList" class="result-list">
+          <div class="empty">No subgraph rendered yet.</div>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <script>
+    "use strict";
+
+    const menuButton = document.getElementById("menuButton");
+    const appNav = document.getElementById("appNav");
+    menuButton?.addEventListener("click", event => {
+      event.stopPropagation();
+      const isOpen = appNav?.classList.toggle("open");
+      menuButton.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    });
+    document.addEventListener("click", event => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target?.closest(".header-left")) {
+        appNav?.classList.remove("open");
+        menuButton?.setAttribute("aria-expanded", "false");
+      }
+    });
+    fetch("/api/auth/status")
+      .then(response => response.ok ? response.json() : null)
+      .then(data => {
+        if (data?.username) {
+          document.getElementById("authUser").textContent = data.username;
+        }
+      })
+      .catch(() => {});
+
+    const state = {
+      nodes: [],
+      edges: [],
+      nodeById: new Map(),
+      out: new Map(),
+      in: new Map(),
+      subNodes: [],
+      subEdges: [],
+      focusedId: null,
+      selectedId: null,
+      scale: 1,
+      tx: 0,
+      ty: 0,
+      dragging: null,
+      panning: false,
+      panStart: null
+    };
+
+    document.getElementById("logoutButton")?.addEventListener("click", async () => {
+      await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+      location.href = "/";
+    });
+
+    const colorByKind = {
+      Screen: "#2563eb",
+      Script: "#7c3aed",
+      AjaxCall: "#f97316",
+      Endpoint: "#dc2626",
+      EndpointGap: "#b42318",
+      JavaType: "#059669",
+      Method: "#0f766e",
+      Field: "#64748b",
+      Table: "#7c2d12",
+      Column: "#a16207",
+      Binding: "#0891b2",
+      UIControl: "#0284c7",
+      TextResource: "#be185d",
+      TypeRef: "#6b7280",
+      Package: "#475569",
+      Module: "#334155"
+    };
+
+    const shapeByKind = {
+      Screen: "rect",
+      Endpoint: "rect",
+      EndpointGap: "rect",
+      UIControl: "rect",
+      Table: "rect",
+      Column: "rect"
+    };
+
+    const el = {
+      statusDot: document.getElementById("statusDot"),
+      statusText: document.getElementById("statusText"),
+      nodeCount: document.getElementById("nodeCount"),
+      edgeCount: document.getElementById("edgeCount"),
+      viewNodeCount: document.getElementById("viewNodeCount"),
+      viewEdgeCount: document.getElementById("viewEdgeCount"),
+      kind: document.getElementById("kind"),
+      query: document.getElementById("query"),
+      depth: document.getElementById("depth"),
+      direction: document.getElementById("direction"),
+      maxNodes: document.getElementById("maxNodes"),
+      edgeLabels: document.getElementById("edgeLabels"),
+      results: document.getElementById("results"),
+      selection: document.getElementById("selection"),
+      svg: document.getElementById("graphSvg"),
+      legend: document.getElementById("legend"),
+      edgeTypeList: document.getElementById("edgeTypeList"),
+      toast: document.getElementById("toast")
+    };
+
+    function setStatus(text, ready) {
+      el.statusText.textContent = text;
+      el.statusDot.classList.toggle("ready", Boolean(ready));
+    }
+
+    function showToast(text) {
+      el.toast.textContent = text;
+      el.toast.style.display = "block";
+      window.clearTimeout(showToast.timer);
+      showToast.timer = window.setTimeout(() => {
+        el.toast.style.display = "none";
+      }, 6000);
+    }
+
+    async function fetchText(path) {
+      const res = await fetch(path, { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error(`${path}: HTTP ${res.status}`);
+      }
+      return res.text();
+    }
+
+    function parseNdjson(text) {
+      return text.split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(line => JSON.parse(line));
+    }
+
+    async function loadDefault() {
+      setStatus("Loading business-graph/*.ndjson...", false);
+      try {
+        const [nodesText, edgesText] = await Promise.all([
+          fetchText("business-graph/nodes.ndjson"),
+          fetchText("business-graph/edges.ndjson")
+        ]);
+        loadGraph(parseNdjson(nodesText), parseNdjson(edgesText));
+        setStatus("Graph loaded from business-graph", true);
+        runSearch();
+      } catch (err) {
+        setStatus("Default load failed", false);
+        showToast("Could not fetch business-graph files. Run a local HTTP server, or use the file pickers. " + err.message);
+      }
+    }
+
+    function readFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(file);
+      });
+    }
+
+    async function loadSelectedFiles() {
+      const nodesFile = document.getElementById("nodesFile").files[0];
+      const edgesFile = document.getElementById("edgesFile").files[0];
+      if (!nodesFile || !edgesFile) {
+        showToast("Choose both nodes.ndjson and edges.ndjson.");
+        return;
+      }
+      setStatus("Loading selected files...", false);
+      const [nodesText, edgesText] = await Promise.all([readFile(nodesFile), readFile(edgesFile)]);
+      loadGraph(parseNdjson(nodesText), parseNdjson(edgesText));
+      setStatus("Graph loaded from selected files", true);
+      runSearch();
+    }
+
+    function loadGraph(nodes, edges) {
+      state.nodes = nodes;
+      state.edges = edges;
+      state.nodeById = new Map(nodes.map(n => [n.id, n]));
+      state.out = new Map();
+      state.in = new Map();
+      for (const edge of edges) {
+        if (!state.nodeById.has(edge.from) || !state.nodeById.has(edge.to)) continue;
+        if (!state.out.has(edge.from)) state.out.set(edge.from, []);
+        if (!state.in.has(edge.to)) state.in.set(edge.to, []);
+        state.out.get(edge.from).push(edge);
+        state.in.get(edge.to).push(edge);
+      }
+      el.nodeCount.textContent = nodes.length.toLocaleString();
+      el.edgeCount.textContent = edges.length.toLocaleString();
+      renderLegend();
+    }
+
+    function nodeName(node) {
+      const p = node.properties || {};
+      return p.name || p.fqn || p.normalized_path || p.path || node.key || node.id;
+    }
+
+    function nodeSub(node) {
+      const p = node.properties || {};
+      if (node.kind === "JavaType") return p.fqn || "";
+      if (node.kind === "AjaxCall") return `${p.source_file || ""}:${p.line || ""}`;
+      if (node.kind === "Endpoint") return `${p.source || ""} ${p.path_source || p.path || ""}`;
+      if (node.kind === "EndpointGap") return `${p.status || ""} ${p.context || ""}`;
+      if (node.kind === "UIControl") return `${p.component || ""} ${p.source_file || ""}:${p.line || ""}`;
+      if (node.kind === "Method") return `${p.fqn || ""}:${p.line || ""}`;
+      if (node.kind === "Screen") return p.path || "";
+      if (node.kind === "Table" || node.kind === "Column") return p.table || "";
+      return p.path || p.source_file || "";
+    }
+
+    function haystack(node) {
+      if (!node._haystack) {
+        const p = node.properties || {};
+        node._haystack = [
+          node.kind,
+          node.key,
+          nodeName(node),
+          p.fqn,
+          p.normalized_path,
+          p.path,
+          p.source_file,
+          p.path_source,
+          p.table,
+          p.context,
+          p.component,
+          p.binding_expression,
+          Array.isArray(p.binding_keys) ? p.binding_keys.join(" ") : p.binding_keys,
+          p.status,
+          p.reason,
+          p.resolution_status,
+          p.resolution_reason,
+          ...(node.labels || [])
+        ].filter(Boolean).join(" ").toLowerCase();
+      }
+      return node._haystack;
+    }
+
+    function matchesKind(node, kind) {
+      if (kind === "Any") return true;
+      if (kind === "Table") return node.kind === "Table" || node.kind === "Column";
+      return node.kind === kind;
+    }
+
+    function searchNodes() {
+      const kind = el.kind.value;
+      const q = el.query.value.trim().toLowerCase();
+      if (!q) return [];
+      return state.nodes
+        .filter(n => matchesKind(n, kind) && haystack(n).includes(q))
+        .slice(0, 80);
+    }
+
+    function runSearch() {
+      if (!state.nodes.length) {
+        showToast("Graph is not loaded yet.");
+        return;
+      }
+      const results = searchNodes();
+      renderResults(results);
+      if (results.length) {
+        focusNode(results[0].id);
+      } else {
+        state.subNodes = [];
+        state.subEdges = [];
+        renderGraph();
+      }
+    }
+
+    function renderResults(results) {
+      if (!results.length) {
+        el.results.innerHTML = `<div class="empty">No matching nodes.</div>`;
+        return;
+      }
+      el.results.innerHTML = "";
+      for (const node of results) {
+        const row = document.createElement("div");
+        row.className = "result";
+        row.innerHTML = `
+          <div class="title">${escapeHtml(nodeName(node))}</div>
+          <div class="meta">${escapeHtml(node.kind)} &middot; ${escapeHtml(nodeSub(node))}</div>
+        `;
+        row.addEventListener("click", () => focusNode(node.id));
+        el.results.appendChild(row);
+      }
+    }
+
+    function focusNode(id) {
+      state.focusedId = id;
+      state.selectedId = id;
+      buildSubgraph(id);
+      renderGraph();
+      renderSelection(id);
+    }
+
+    function buildSubgraph(seedId) {
+      const maxDepth = Number(el.depth.value || 1);
+      const maxNodes = Number(el.maxNodes.value || 220);
+      const direction = el.direction.value;
+      const seen = new Set([seedId]);
+      const queue = [{ id: seedId, depth: 0 }];
+      const edgeIds = new Set();
+      const subEdges = [];
+
+      while (queue.length && seen.size < maxNodes) {
+        const item = queue.shift();
+        if (item.depth >= maxDepth) continue;
+
+        const nextEdges = [];
+        if (direction === "out" || direction === "both") nextEdges.push(...(state.out.get(item.id) || []));
+        if (direction === "in" || direction === "both") nextEdges.push(...(state.in.get(item.id) || []));
+
+        for (const edge of nextEdges) {
+          if (edgeIds.has(edge.id)) continue;
+          const other = edge.from === item.id ? edge.to : edge.from;
+          if (!state.nodeById.has(other)) continue;
+          edgeIds.add(edge.id);
+          subEdges.push(edge);
+          if (!seen.has(other)) {
+            seen.add(other);
+            if (seen.size >= maxNodes) break;
+            queue.push({ id: other, depth: item.depth + 1 });
+          }
+        }
+      }
+
+      state.subNodes = Array.from(seen).map(id => cloneForLayout(state.nodeById.get(id)));
+      const subSet = new Set(state.subNodes.map(n => n.id));
+      state.subEdges = subEdges.filter(e => subSet.has(e.from) && subSet.has(e.to));
+      layoutSubgraph();
+    }
+
+    function cloneForLayout(node) {
+      return {
+        ...node,
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0
+      };
+    }
+
+    function layoutSubgraph() {
+      const nodes = state.subNodes;
+      const edges = state.subEdges;
+      const n = nodes.length;
+      const svgBox = el.svg.getBoundingClientRect();
+      const width = Math.max(700, svgBox.width || 900);
+      const height = Math.max(500, svgBox.height || 700);
+      const byId = new Map(nodes.map((node, i) => [node.id, { node, i }]));
+      const radius = Math.min(width, height) * 0.36;
+
+      nodes.forEach((node, i) => {
+        const angle = (i / Math.max(1, n)) * Math.PI * 2;
+        node.x = width / 2 + Math.cos(angle) * radius;
+        node.y = height / 2 + Math.sin(angle) * radius;
+      });
+      const seed = byId.get(state.focusedId);
+      if (seed) {
+        seed.node.x = width / 2;
+        seed.node.y = height / 2;
+      }
+
+      const iterations = Math.min(300, Math.max(80, 40 + n * 2));
+      for (let step = 0; step < iterations; step++) {
+        const alpha = 1 - step / iterations;
+        for (let i = 0; i < n; i++) {
+          for (let j = i + 1; j < n; j++) {
+            const a = nodes[i];
+            const b = nodes[j];
+            let dx = b.x - a.x;
+            let dy = b.y - a.y;
+            let dist2 = dx * dx + dy * dy + 0.01;
+            const force = Math.min(4500 / dist2, 2.2) * alpha;
+            const dist = Math.sqrt(dist2);
+            dx /= dist;
+            dy /= dist;
+            a.vx -= dx * force;
+            a.vy -= dy * force;
+            b.vx += dx * force;
+            b.vy += dy * force;
+          }
+        }
+
+        for (const edge of edges) {
+          const a = byId.get(edge.from)?.node;
+          const b = byId.get(edge.to)?.node;
+          if (!a || !b) continue;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const desired = edge.type === "RESOLVES_TO_JAVA_ENDPOINT" ? 90 : 140;
+          const pull = (dist - desired) * 0.018 * alpha;
+          const fx = (dx / dist) * pull;
+          const fy = (dy / dist) * pull;
+          a.vx += fx;
+          a.vy += fy;
+          b.vx -= fx;
+          b.vy -= fy;
+        }
+
+        for (const node of nodes) {
+          if (node.id === state.focusedId) {
+            node.vx += (width / 2 - node.x) * 0.08;
+            node.vy += (height / 2 - node.y) * 0.08;
+          } else {
+            node.vx += (width / 2 - node.x) * 0.004;
+            node.vy += (height / 2 - node.y) * 0.004;
+          }
+          node.x += node.vx;
+          node.y += node.vy;
+          node.vx *= 0.82;
+          node.vy *= 0.82;
+        }
+      }
+    }
+
+    function renderGraph() {
+      const svg = el.svg;
+      const width = svg.clientWidth || 900;
+      const height = svg.clientHeight || 700;
+      svg.setAttribute("viewBox", `${state.tx} ${state.ty} ${width / state.scale} ${height / state.scale}`);
+      svg.innerHTML = "";
+      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+      defs.innerHTML = `
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"></path>
+        </marker>
+        <marker id="arrowHighlight" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#0969da"></path>
+        </marker>
+      `;
+      svg.appendChild(defs);
+
+      if (!state.subNodes.length) {
+        setVisibleCounts(0, 0);
+        renderEdgeTypes([]);
+        return;
+      }
+
+      const byId = new Map(state.subNodes.map(n => [n.id, n]));
+      const edgeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      const labelGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      const nodeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      svg.appendChild(edgeGroup);
+      svg.appendChild(labelGroup);
+      svg.appendChild(nodeGroup);
+
+      for (const edge of state.subEdges) {
+        const a = byId.get(edge.from);
+        const b = byId.get(edge.to);
+        if (!a || !b) continue;
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        const highlight = edge.type === "RESOLVES_TO_JAVA_ENDPOINT" ||
+          edge.type === "EXPOSES_ENDPOINT" ||
+          edge.type === "UNRESOLVED_ENDPOINT_REFERENCE" ||
+          edge.type === "REPOSITORY_USES_ENTITY" ||
+          edge.type === "REPOSITORY_ACCESSES_TABLE";
+        line.setAttribute("x1", a.x);
+        line.setAttribute("y1", a.y);
+        line.setAttribute("x2", b.x);
+        line.setAttribute("y2", b.y);
+        line.setAttribute("class", highlight ? "edge highlight" : "edge");
+        line.setAttribute("marker-end", highlight ? "url(#arrowHighlight)" : "url(#arrow)");
+        edgeGroup.appendChild(line);
+
+        if (el.edgeLabels.value === "on") {
+          const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          label.setAttribute("x", (a.x + b.x) / 2);
+          label.setAttribute("y", (a.y + b.y) / 2);
+          label.setAttribute("class", "graph-label");
+          label.textContent = edge.type;
+          labelGroup.appendChild(label);
+        }
+      }
+
+      for (const node of state.subNodes) {
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.setAttribute("class", `node ${node.id === state.focusedId ? "focused" : ""}`);
+        g.setAttribute("transform", `translate(${node.x},${node.y})`);
+        g.addEventListener("click", evt => {
+          evt.stopPropagation();
+          state.selectedId = node.id;
+          renderSelection(node.id);
+          renderGraph();
+        });
+
+        const fill = colorByKind[node.kind] || "#64748b";
+        const shape = shapeByKind[node.kind] || "circle";
+        if (shape === "rect") {
+          const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+          r.setAttribute("x", -10);
+          r.setAttribute("y", -10);
+          r.setAttribute("width", 20);
+          r.setAttribute("height", 20);
+          r.setAttribute("rx", 4);
+          r.setAttribute("fill", fill);
+          g.appendChild(r);
+        } else {
+          const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          c.setAttribute("r", node.id === state.selectedId ? 10 : 8);
+          c.setAttribute("fill", fill);
+          g.appendChild(c);
+        }
+
+        const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+        title.textContent = `${node.kind}: ${nodeName(node)}`;
+        g.appendChild(title);
+
+        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        label.setAttribute("x", 13);
+        label.setAttribute("y", 4);
+        label.setAttribute("class", "graph-label");
+        label.textContent = truncate(nodeName(node), 38);
+        g.appendChild(label);
+        nodeGroup.appendChild(g);
+      }
+
+      setVisibleCounts(state.subNodes.length, state.subEdges.length);
+      renderEdgeTypes(state.subEdges);
+    }
+
+    function setVisibleCounts(nodes, edges) {
+      el.viewNodeCount.textContent = nodes.toLocaleString();
+      el.viewEdgeCount.textContent = edges.toLocaleString();
+    }
+
+    function renderSelection(id) {
+      const node = state.nodeById.get(id);
+      if (!node) {
+        el.selection.innerHTML = `<div class="empty">No node selected.</div>`;
+        return;
+      }
+      const incoming = state.in.get(id) || [];
+      const outgoing = state.out.get(id) || [];
+      const props = JSON.stringify(node.properties || {}, null, 2);
+      const labels = (node.labels || []).join(", ");
+      const adjacent = [
+        ...incoming.slice(0, 12).map(e => `IN  ${e.type} <- ${nodeName(state.nodeById.get(e.from))}`),
+        ...outgoing.slice(0, 12).map(e => `OUT ${e.type} -> ${nodeName(state.nodeById.get(e.to))}`)
+      ].join("\n");
+      el.selection.innerHTML = `
+        <div class="headline">${escapeHtml(nodeName(node))}</div>
+        <div class="sub">${escapeHtml(node.kind)} &middot; ${escapeHtml(labels)}</div>
+        <pre>${escapeHtml(props)}</pre>
+        <div style="height:10px"></div>
+        <h2>Adjacent Edges</h2>
+        <pre>${escapeHtml(adjacent || "No adjacent edges.")}</pre>
+      `;
+    }
+
+    function renderEdgeTypes(edges) {
+      if (!edges.length) {
+        el.edgeTypeList.innerHTML = `<div class="empty">No visible edges.</div>`;
+        return;
+      }
+      const counts = new Map();
+      for (const edge of edges) counts.set(edge.type, (counts.get(edge.type) || 0) + 1);
+      el.edgeTypeList.innerHTML = "";
+      [...counts.entries()].sort((a, b) => b[1] - a[1]).forEach(([type, count]) => {
+        const row = document.createElement("div");
+        row.className = "result";
+        row.innerHTML = `<div class="title">${escapeHtml(type)}</div><div class="meta">${count.toLocaleString()} edges</div>`;
+        el.edgeTypeList.appendChild(row);
+      });
+    }
+
+    function renderLegend() {
+      el.legend.innerHTML = "";
+      Object.entries(colorByKind).forEach(([kind, color]) => {
+        const item = document.createElement("div");
+        item.className = "legend-item";
+        item.innerHTML = `<span class="swatch" style="background:${color}"></span><span>${escapeHtml(kind)}</span>`;
+        el.legend.appendChild(item);
+      });
+    }
+
+    function fitView() {
+      state.scale = 1;
+      state.tx = 0;
+      state.ty = 0;
+      renderGraph();
+    }
+
+    function zoom(multiplier) {
+      const svg = el.svg;
+      const width = svg.clientWidth || 900;
+      const height = svg.clientHeight || 700;
+      const oldScale = state.scale;
+      const newScale = Math.max(0.25, Math.min(5, state.scale * multiplier));
+      if (newScale === oldScale) return;
+      const cx = state.tx + (width / oldScale) / 2;
+      const cy = state.ty + (height / oldScale) / 2;
+      state.scale = newScale;
+      state.tx = cx - (width / newScale) / 2;
+      state.ty = cy - (height / newScale) / 2;
+      renderGraph();
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function truncate(value, max) {
+      const s = String(value ?? "");
+      return s.length > max ? s.slice(0, max - 1) + "..." : s;
+    }
+
+    document.getElementById("search").addEventListener("click", runSearch);
+    document.getElementById("loadFiles").addEventListener("click", loadSelectedFiles);
+    document.getElementById("reloadDefault").addEventListener("click", loadDefault);
+    document.getElementById("fit").addEventListener("click", fitView);
+    document.getElementById("zoomIn").addEventListener("click", () => zoom(1.2));
+    document.getElementById("zoomOut").addEventListener("click", () => zoom(0.84));
+    document.getElementById("resetView").addEventListener("click", fitView);
+    el.edgeLabels.addEventListener("change", renderGraph);
+    el.query.addEventListener("keydown", evt => {
+      if (evt.key === "Enter") runSearch();
+    });
+
+    document.querySelectorAll(".chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        el.kind.value = chip.dataset.kind;
+        el.query.value = chip.dataset.query;
+        el.depth.value = chip.dataset.depth;
+        runSearch();
+      });
+    });
+
+    el.svg.addEventListener("click", () => {
+      if (state.justPanned) {
+        state.justPanned = false;
+        return;
+      }
+      state.selectedId = null;
+      renderSelection(null);
+      renderGraph();
+    });
+
+    el.svg.addEventListener("mousedown", evt => {
+      if (evt.button !== 0) return;
+      if (evt.target.closest && evt.target.closest(".node")) return;
+      state.panning = true;
+      state.justPanned = false;
+      state.panStart = {
+        x: evt.clientX,
+        y: evt.clientY,
+        tx: state.tx,
+        ty: state.ty
+      };
+      document.querySelector(".viewer").classList.add("panning");
+      evt.preventDefault();
+    });
+
+    window.addEventListener("mousemove", evt => {
+      if (!state.panning || !state.panStart) return;
+      const dx = (evt.clientX - state.panStart.x) / state.scale;
+      const dy = (evt.clientY - state.panStart.y) / state.scale;
+      if (Math.abs(evt.clientX - state.panStart.x) + Math.abs(evt.clientY - state.panStart.y) > 3) {
+        state.justPanned = true;
+      }
+      state.tx = state.panStart.tx - dx;
+      state.ty = state.panStart.ty - dy;
+      renderGraph();
+    });
+
+    window.addEventListener("mouseup", () => {
+      if (!state.panning) return;
+      state.panning = false;
+      state.panStart = null;
+      document.querySelector(".viewer").classList.remove("panning");
+    });
+
+    el.svg.addEventListener("mouseleave", () => {
+      if (!state.panning) return;
+      state.panning = false;
+      state.panStart = null;
+      document.querySelector(".viewer").classList.remove("panning");
+    });
+
+    el.svg.addEventListener("wheel", evt => {
+      evt.preventDefault();
+      zoom(evt.deltaY < 0 ? 1.1 : 0.9);
+    }, { passive: false });
+
+    window.addEventListener("resize", () => {
+      if (state.subNodes.length) {
+        layoutSubgraph();
+        renderGraph();
+      }
+    });
+
+    renderLegend();
+    loadDefault();
+  </script>
+</body>
+</html>

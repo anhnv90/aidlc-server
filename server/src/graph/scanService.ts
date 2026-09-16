@@ -85,16 +85,18 @@ export class GraphScanService {
   private readonly jobs = new Map<string, ScanJob>();
 
   readonly graphRoot = config.graph.rootPath;
+  readonly outputRoot = config.graph.outputRootPath;
   readonly businessGraphDir = config.graph.businessGraphDir;
-  readonly cpgDir = join(this.graphRoot, "cpg");
-  readonly logsDir = join(this.graphRoot, "logs");
+  readonly cpgDir = join(this.outputRoot, "cpg");
+  readonly logsDir = join(this.outputRoot, "logs");
   readonly scriptsDir = join(this.graphRoot, "scripts");
-  readonly configPath = join(this.graphRoot, "scan-config.json");
+  readonly configPath = join(this.outputRoot, "scan-config.json");
 
   versionPayload() {
     return {
       schemaVersion: SERVER_SCHEMA_VERSION,
       graphRoot: this.graphRoot,
+      outputRoot: this.outputRoot,
       configPath: this.configPath
     };
   }
@@ -105,6 +107,7 @@ export class GraphScanService {
     return {
       schemaVersion: SERVER_SCHEMA_VERSION,
       graphRoot: this.graphRoot,
+      outputRoot: this.outputRoot,
       businessGraphDir: this.businessGraphDir,
       defaults: this.defaultConfig(),
       config: scanConfig,
@@ -260,16 +263,24 @@ export class GraphScanService {
       }
 
       if (job.payload.importSqlite !== false) {
+        mkdirSync(dirname(config.graph.sqliteDbPath), { recursive: true });
         await this.runLogged(
           job,
           "Import graph SQLite",
-          [pythonExe, join(this.scriptsDir, "import_graph_to_sqlite.py"), "--graph-dir", this.businessGraphDir],
+          [
+            pythonExe,
+            join(this.scriptsDir, "import_graph_to_sqlite.py"),
+            "--graph-dir",
+            this.businessGraphDir,
+            "--db",
+            config.graph.sqliteDbPath
+          ],
           join(this.logsDir, "import-graph-sqlite.log")
         );
       }
 
       const summaryPath = join(this.businessGraphDir, "summary.json");
-      const sqlitePath = join(this.businessGraphDir, "graph.sqlite");
+      const sqlitePath = config.graph.sqliteDbPath;
       job.status = "completed";
       job.finished_at = timestamp();
       job.result = {
@@ -297,7 +308,8 @@ export class GraphScanService {
       return;
     }
 
-    const graphMount = `${this.graphRoot}:/graph`;
+    const graphMount = `${this.outputRoot}:/graph`;
+    const scriptsMount = `${this.scriptsDir}:/graph-scripts:ro`;
     const sourceMount = `${source}:/src:ro`;
     mkdirSync(this.cpgDir, { recursive: true });
 
@@ -369,10 +381,12 @@ export class GraphScanService {
         "--rm",
         "-v",
         graphMount,
+        "-v",
+        scriptsMount,
         joernImage,
         "joern",
         "--script",
-        "/graph/scripts/verify-cpg.sc",
+        "/graph-scripts/verify-cpg.sc",
         "--param",
         `cpgFile=/graph/cpg/${project.name}-java-cpg.bin.zip`,
         "--param",
@@ -389,10 +403,12 @@ export class GraphScanService {
         "--rm",
         "-v",
         graphMount,
+        "-v",
+        scriptsMount,
         joernImage,
         "joern",
         "--script",
-        "/graph/scripts/verify-cpg.sc",
+        "/graph-scripts/verify-cpg.sc",
         "--param",
         `cpgFile=/graph/cpg/${project.name}-ui-js-cpg.bin.zip`,
         "--param",
@@ -573,7 +589,7 @@ function projectStatus(project: ProjectSpec) {
 }
 
 function looksLikeProject(path: string) {
-  for (const marker of ["build.gradle", "build.gradle.kts", "settings.gradle", "pom.xml", "package.json"]) {
+  for (const marker of ["build.gradle", "build.gradle.kts", "settings.gradle", "pom.xml", "package.json", "appProperties.gradle"]) {
     if (existsSync(join(path, marker))) return true;
   }
   return existsSync(join(path, "src")) || existsSync(join(path, "src", "main"));
